@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="334771623049822220\**" />
+    <Compile Remove="455870602813767680\**" />
+    <Compile Remove="cite\**" />
+    <Compile Remove="img\**" />
+    <Compile Remove="userimg\**" />
+    <EmbeddedResource Remove="334771623049822220\**" />
+    <EmbeddedResource Remove="455870602813767680\**" />
+    <EmbeddedResource Remove="cite\**" />
+    <EmbeddedResource Remove="img\**" />
+    <EmbeddedResource Remove="userimg\**" />
+    <None Remove="334771623049822220\**" />
+    <None Remove="455870602813767680\**" />
+    <None Remove="cite\**" />
+    <None Remove="img\**" />
+    <None Remove="userimg\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="config - Copy.xml" />
+    <None Remove="config.xml" />
+    <None Remove="DiscordBot1.zip" />
+    <None Remove="publish.bat" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Include="publish.bat" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Discord.Net" Version="2.0.0-beta" />
+  </ItemGroup>
+
+</Project>
