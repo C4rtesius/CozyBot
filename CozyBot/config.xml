@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<botconfig>
+  <token>BotToken</token>
+  <coreprefix>s!</coreprefix>
+</botconfig>
