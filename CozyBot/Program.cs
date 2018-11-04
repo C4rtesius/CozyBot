@@ -149,7 +149,7 @@ namespace DiscordBot1
             await Task.Run(
                 () =>
                 {
-                    using (var stream = File.Open("config.xml", FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var stream = File.Open(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     {
                         _config = XDocument.Load(stream);
                     }
