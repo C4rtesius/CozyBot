@@ -8,28 +8,79 @@ using Discord.WebSocket;
 
 namespace DiscordBot1
 {
+    /// <summary>
+    /// Abstract Class describes user content, which can be saved and posted by bot.
+    /// </summary>
     public abstract class ContentModule : IBotModule
     {
+        /// <summary>
+        /// Configuration commands list.
+        /// </summary>
         protected List<IBotCommand> _cfgCommands = new List<IBotCommand>();
+
+        /// <summary>
+        /// Content Use commands list.
+        /// </summary>
         protected List<IBotCommand> _useCommands = new List<IBotCommand>();
+
+        /// <summary>
+        /// Content Addition commands list.
+        /// </summary>
         protected List<IBotCommand> _addCommands = new List<IBotCommand>();
+
+        /// <summary>
+        /// Content deletion commands list.
+        /// </summary>
         protected List<IBotCommand> _delCommands = new List<IBotCommand>();
 
+        /// <summary>
+        /// Boolean flag indicating if module is active.
+        /// </summary>
         protected bool _isActive;
 
-        protected string _defaultPrefix = "c!";
+        /// <summary>
+        /// Module's commands default prefix.
+        /// </summary>
+        protected static string _defaultPrefix = "c!";
+
+        /// <summary>
+        /// Module's commands current prefix.
+        /// </summary>
         protected string _prefix;
 
+        /// <summary>
+        /// Bot's ID.
+        /// </summary>
         protected ulong _clientId;
+
+        /// <summary>
+        /// List of guild admins IDs.
+        /// </summary>
         protected List<ulong> _adminIds;
 
+        /// <summary>
+        /// XElement containing guild's modules config.
+        /// </summary>
         protected XElement _configEl;
+
+        /// <summary>
+        /// XElement containing this module config.
+        /// </summary>
         protected XElement _moduleConfigEl;
 
+        /// <summary>
+        /// Internal RNG.
+        /// </summary>
         protected static Random _rnd = new Random();
 
+        /// <summary>
+        /// Internal configuration change event.
+        /// </summary>
         protected event ConfigChanged _configChanged;
 
+        /// <summary>
+        /// Configuration Changed Event. Raised on changes to config.
+        /// </summary>
         public event ConfigChanged ConfigChanged
         {
             add
@@ -56,10 +107,19 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// Module string identifier.
+        /// </summary>
         public abstract string StringID { get; }
 
+        /// <summary>
+        /// Module name in Guild config.
+        /// </summary>
         public abstract string ModuleXmlName { get; }
 
+        /// <summary>
+        /// List containing active commands.
+        /// </summary>
         public virtual IEnumerable<IBotCommand> ActiveCommands
         {
             get
@@ -83,6 +143,12 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// ContentModule constructor.
+        /// </summary>
+        /// <param name="configEl">XElement containing guild's modules config.</param>
+        /// <param name="adminIds">List of Guild Admins.</param>
+        /// <param name="clientId">ID of Bot.</param>
         public ContentModule(XElement configEl, List<ulong> adminIds, ulong clientId)
         {
             _configEl = configEl ?? throw new ArgumentNullException("Configuration Element cannot be null.");
@@ -109,6 +175,10 @@ namespace DiscordBot1
             Configure(_configEl);
         }
 
+        /// <summary>
+        /// Module reconfiguration method.
+        /// </summary>
+        /// <param name="configEl">XElement containing guild's modules config.</param>
         public void Reconfigure(XElement configEl)
         {
             if (configEl == null)
@@ -119,6 +189,11 @@ namespace DiscordBot1
             Configure(configEl);
         }
 
+        /// <summary>
+        /// Extracts list of IDs from XAttribute.
+        /// </summary>
+        /// <param name="attr">XAttribute to extract IDs from.</param>
+        /// <returns>List of IDs from specified XAttribute.</returns>
         protected List<ulong> ExtractPermissions(XAttribute attr)
         {
             List<ulong> ids = new List<ulong>();
@@ -142,6 +217,10 @@ namespace DiscordBot1
             return ids;
         }
 
+        /// <summary>
+        /// Module configuration method.
+        /// </summary>
+        /// <param name="configEl">XElement containing guild's modules config.</param>
         protected virtual void Configure(XElement configEl)
         {
             XElement moduleCfgEl = configEl.Element(ModuleXmlName);
@@ -225,6 +304,10 @@ namespace DiscordBot1
             _cfgCommands = new List<IBotCommand> { configCmd };
         }
 
+        /// <summary>
+        /// Generates content addition commands from specified list of allowed role IDs.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Add command.</param>
         protected virtual void GenerateAddCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -242,6 +325,11 @@ namespace DiscordBot1
             _addCommands = new List<IBotCommand> { addCmd };
         }
 
+
+        /// <summary>
+        /// Generates content deletion commands from specified list of allowed role IDs.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Delete command.</param>
         protected virtual void GenerateDelCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -259,6 +347,10 @@ namespace DiscordBot1
             _delCommands = new List<IBotCommand> { delCmd };
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="perms"></param>
         protected virtual void GenerateUseCommands(List<ulong> perms)
         {
             List<IBotCommand> useCommands = new List<IBotCommand>();

@@ -13,14 +13,43 @@ namespace DiscordBot1
     public class CitationModule : ContentModule
     {
         //Private Fields
+
+        /// <summary>
+        /// Filename of module config.
+        /// </summary>
+        private static string _configFileName = "CitationModuleConfig.xml";
+
+        /// <summary>
+        /// String module Identifier.
+        /// </summary>
         private static string _stringID = "CitationModule";
+
+        /// <summary>
+        /// Module name in Guild config.
+        /// </summary>
         private static string _moduleXmlName = "usercite";
+
+        /// <summary>
+        /// Module working path.
+        /// </summary>
         private string _workingPath;
 
+        /// <summary>
+        /// String module identifier.
+        /// </summary>
         public override string StringID { get { return _stringID; } }
+        /// <summary>
+        /// Module name in Guild config.
+        /// </summary>
         public override string ModuleXmlName { get { return _moduleXmlName; } }
 
-
+        /// <summary>
+        /// Citation module constructor.
+        /// </summary>
+        /// <param name="configEl">XML Element containing Guild modules config.</param>
+        /// <param name="adminIds">IDs of Guild admins.</param>
+        /// <param name="clientId">Bot ID.</param>
+        /// <param name="workingPath">Path to module working folder.</param>
         public CitationModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
             : base (configEl, adminIds, clientId)
         {
