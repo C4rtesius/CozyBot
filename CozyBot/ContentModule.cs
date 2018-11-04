@@ -287,6 +287,10 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// Generates module configuration commands from specified list of allowed role IDs.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Config commands.</param>
         protected virtual void GenerateCfgCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -307,7 +311,7 @@ namespace DiscordBot1
         /// <summary>
         /// Generates content addition commands from specified list of allowed role IDs.
         /// </summary>
-        /// <param name="perms">List of Roles IDs which are allowed to use Add command.</param>
+        /// <param name="perms">List of Roles IDs which are allowed to use Add commands.</param>
         protected virtual void GenerateAddCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -329,7 +333,7 @@ namespace DiscordBot1
         /// <summary>
         /// Generates content deletion commands from specified list of allowed role IDs.
         /// </summary>
-        /// <param name="perms">List of Roles IDs which are allowed to use Delete command.</param>
+        /// <param name="perms">List of Roles IDs which are allowed to use Delete commands.</param>
         protected virtual void GenerateDelCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -348,16 +352,23 @@ namespace DiscordBot1
         }
 
         /// <summary>
-        /// 
+        /// Generates content usage commands from specified list of allowed role IDs.
         /// </summary>
-        /// <param name="perms"></param>
+        /// <param name="perms">List of Roles IDs which are allowed to use Use commands.</param>
         protected virtual void GenerateUseCommands(List<ulong> perms)
         {
             List<IBotCommand> useCommands = new List<IBotCommand>();
 
-            foreach (var _keyEl in _moduleConfigEl.Elements())
+            var keys = _moduleConfigEl.Elements("key");
+
+            foreach (var keyEl in keys)
             {
-                string key = _keyEl.Name.ToString();
+                if (keyEl.Attribute("name") == null)
+                {
+                    continue;
+                }
+
+                string key = keyEl.Attribute("name").ToString();
 
                 List<ulong> allUsePerms = new List<ulong>(_adminIds);
                 allUsePerms.AddRange(perms);
@@ -369,7 +380,7 @@ namespace DiscordBot1
                     new BotCommand(
                         StringID + "-" + key + "-usecmd",
                         useRule,
-                        UseCommandGenerator(_keyEl.Value)
+                        UseCommandGenerator(keyEl.Value)
                     )
                 );
             }
@@ -403,6 +414,11 @@ namespace DiscordBot1
             _useCommands = useCommands;
         }
 
+        /// <summary>
+        /// Module configuration command.
+        /// </summary>
+        /// <param name="msg">SocketMessage containing command.</param>
+        /// <returns>Async Task performing configuration.</returns>
         protected virtual async Task ConfigCommand(SocketMessage msg)
         {
             string content = msg.Content;
@@ -420,6 +436,12 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// Permission control command. Changes commands usage permissions on per-role basis.
+        /// </summary>
+        /// <param name="category">Command to change access to. Valid values - cfg, add, use, del.</param>
+        /// <param name="msg">SocketMessage containing command.</param>
+        /// <returns>Async Task perfrorming permissions change.</returns>
         protected virtual async Task PermissionControlCommand(string category, SocketMessage msg)
         {
             var roles = msg.MentionedRoles;
@@ -455,6 +477,12 @@ namespace DiscordBot1
             await msg.Channel.SendMessageAsync("Дозволи було змінено " + EmojiCodes.Picardia);
         }
 
+        /// <summary>
+        /// Modifies access to specified command, allowing specified role IDs usage of command.
+        /// </summary>
+        /// <param name="attr">XAttribute specifing permission.</param>
+        /// <param name="ids">List of Role IDs allowed to use command.</param>
+        /// <returns>Async Task performing permissions change.</returns>
         protected virtual async Task ModifyPermissions(XAttribute attr, List<ulong> ids)
         {
             string newValue = String.Empty;
@@ -469,6 +497,11 @@ namespace DiscordBot1
             await RaiseConfigChanged(_configEl);
         }
 
+        /// <summary>
+        /// Config Changed Event wrapper.
+        /// </summary>
+        /// <param name="configEl">New configuration.</param>
+        /// <returns>Async task performing config change.</returns>
         protected async Task RaiseConfigChanged(XElement configEl)
         {
             await Task.Run(
@@ -479,14 +512,39 @@ namespace DiscordBot1
             );
         }
 
+        /// <summary>
+        /// Abstract method for content Addition command.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing content Addition.</returns>
         protected abstract Task AddCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for content Addition command.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing content Deletion.</returns>
         protected abstract Task DeleteCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for Help command.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing Help function.</returns>
         protected abstract Task HelpCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for providing List of user uploaded content.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing List function.</returns>
         protected abstract Task ListCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for content Usage command generator.
+        /// </summary>
+        /// <param name="key">Key by which content should be accessed.</param>
+        /// <returns>Function which provides content accessed by specified key.</returns>
         protected abstract Func<SocketMessage, Task> UseCommandGenerator(string key);
 
     }
