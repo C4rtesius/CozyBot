@@ -380,7 +380,7 @@ namespace DiscordBot1
                     new BotCommand(
                         StringID + "-" + key + "-usecmd",
                         useRule,
-                        UseCommandGenerator(keyEl.Value)
+                        UseCommandGenerator(key)
                     )
                 );
             }

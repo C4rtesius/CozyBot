@@ -14,10 +14,12 @@ namespace DiscordBot1
     {
         //Private Fields
 
+        private static int _msgLengthLimit = 1980;
+
         /// <summary>
         /// Filename of module config.
         /// </summary>
-        private static string _configFileName = "CitationModuleConfig.xml";
+        // private static string _configFileName = "CitationModuleConfig.xml";
 
         /// <summary>
         /// String module Identifier.
@@ -30,7 +32,17 @@ namespace DiscordBot1
         private static string _moduleXmlName = "usercite";
 
         /// <summary>
-        /// Module working path.
+        /// Module working folder.
+        /// </summary>
+        private static string _moduleFolder = @"usercite\";
+
+        /// <summary>
+        /// String for citation usage count in XML.
+        /// </summary>
+        private static string _usageCountAttributeName = "used";
+
+        /// <summary>
+        /// Guild working path.
         /// </summary>
         private string _workingPath;
 
@@ -38,6 +50,7 @@ namespace DiscordBot1
         /// String module identifier.
         /// </summary>
         public override string StringID { get { return _stringID; } }
+
         /// <summary>
         /// Module name in Guild config.
         /// </summary>
@@ -59,13 +72,18 @@ namespace DiscordBot1
             {
                 Directory.CreateDirectory(_workingPath);
             }
-            if (!Directory.Exists(_workingPath + @"usercite\"))
+            if (!Directory.Exists(_workingPath + _moduleFolder))
             {
-                Directory.CreateDirectory(_workingPath + @"usercite\");
+                Directory.CreateDirectory(_workingPath + _moduleFolder);
             }
         }
 
-        protected override Func<SocketMessage, Task> UseCommandGenerator(string filepath)
+        /// <summary>
+        /// Generates citations posting commands using specified citation key.
+        /// </summary>
+        /// <param name="key">Key associated with citation category.</param>
+        /// <returns>Function performing citation access associated with specified key.</returns>
+        protected override Func<SocketMessage, Task> UseCommandGenerator(string key)
         {
             return async (msg) =>
             {
@@ -75,46 +93,98 @@ namespace DiscordBot1
                 }
                 catch
                 {
-
+                    // TODO: add logging or specify concrete Exception (?)
                 }
 
-                int linesCount = 0;
-                using (StreamReader sr = new StreamReader(filepath))
+                XElement keyEl = null;
+
+                foreach (var el in _moduleConfigEl.Elements("key"))
                 {
-                    while (await sr.ReadLineAsync() != null)
+                    if (String.Compare(el.Attribute("name").ToString(), key) == 0)
                     {
-                        linesCount++;
+                        keyEl = el;
+                        break;
                     }
                 }
-                int selectedLineIndex = _rnd.Next() % linesCount;
-                string selectedLine = String.Empty;
 
-                int i = 0;
-                using (StreamReader sr = new StreamReader(filepath))
+                if (keyEl == null)
                 {
-                    do
-                    {
-                        selectedLine = await sr.ReadLineAsync();
-                    } while (i++ != selectedLineIndex);
+                    return;
                 }
 
-                SendTextMessageHumanLike(msg, selectedLine);
+                var citationEls = new List<XElement>(keyEl.Elements("citation"));
+
+                if (citationEls.Count == 0)
+                {
+                    return;
+                }
+
+                int selectedIndex = _rnd.Next() % citationEls.Count;
+
+                string filepath = citationEls[selectedIndex].Value.ToString();
+
+                if (!File.Exists(filepath))
+                {
+                    return;
+                }
+
+                string citation = String.Empty;
+
+                using (StreamReader sr = new StreamReader(filepath))
+                {
+                    citation = await sr.ReadToEndAsync();
+                }
+
+                if (citation.Length > _msgLengthLimit)
+                {
+                    // TODO : implement multimessage citations (however unlikely, because no chance to add message
+                    // longer than limit.) Just placeholder to prevent invalid operations.
+                    return;
+                }
+
+                try
+                {
+                    await SendTextMessageHumanLike(msg, citation);
+                }
+                catch
+                {
+                    return;
+                    // TODO : implement more concise exception handling (?)
+                }
+
+                // Incrementing usage count.
+
+                if (keyEl.Attribute(_usageCountAttributeName) != null)
+                {
+                    if (Int32.TryParse(keyEl.Attribute(_usageCountAttributeName).Value, out int uses))
+                    {
+                        uses++;
+                        keyEl.Attribute(_usageCountAttributeName).Value = uses.ToString();
+                        await RaiseConfigChanged(_configEl);
+                    }
+                }
             };
         }
 
-        private void SendTextMessageHumanLike(SocketMessage msg, string line)
+        /// <summary>
+        /// Method to send messages in human-like fashion. Just for lulz.
+        /// </summary>
+        /// <param name="msg">SocketMessage which triggered action.</param>
+        /// <param name="line">String to send.</param>
+        /// <returns>Async Task performing sending message in human-like fashion.</returns>
+        private async Task SendTextMessageHumanLike(SocketMessage msg, string line)
         {
-            Task.Run(
-                async () =>
-                {
-                    await Task.Delay(1500 + (_rnd.Next() % 2000));
-                    await msg.Channel.TriggerTypingAsync();
-                    await Task.Delay(3000 + (_rnd.Next() % 4000));
-                    await msg.Channel.SendMessageAsync(line);
-                }
-            );
+            await Task.Delay(1500 + (_rnd.Next() % 2000));
+            await msg.Channel.TriggerTypingAsync();
+            await Task.Delay(3000 + (_rnd.Next() % 4000));
+            await msg.Channel.SendMessageAsync(line);
         }
 
+        /// <summary>
+        /// Command performing citation adition logic.
+        /// </summary>
+        /// <param name="msg">Message which invoked this command, containing citation to save.</param>
+        /// <returns>Async Task perofrming citation addition logic.</returns>
         protected override async Task AddCommand(SocketMessage msg)
         {
             try
@@ -123,7 +193,7 @@ namespace DiscordBot1
             }
             catch
             {
-
+                // TODO: add logging or specify concrete Exception (?)
             }
 
             var words = msg.Content.Split(" ");
@@ -133,8 +203,9 @@ namespace DiscordBot1
                 return;
             }
 
-            string author = words[1];
+            string key = words[1];
             string citation = String.Empty;
+
 
             for (int i = 2; i < words.Length; i++)
             {
@@ -142,22 +213,22 @@ namespace DiscordBot1
                 citation += " ";
             }
 
-            string filepath = _workingPath + @"usercite\" + author + ".dat";
+            string filepath = _workingPath + _moduleFolder + key + ".dat";
             bool existingAuthor = false;
 
             await Task.Run(
                 () =>
                 {
-                    if (!Directory.Exists(_workingPath + @"usercite\"))
+                    if (!Directory.Exists(_workingPath + _moduleFolder))
                     {
-                        Directory.CreateDirectory(_workingPath + @"usercite\");
+                        Directory.CreateDirectory(_workingPath + _moduleFolder);
                     }
                 }
             );
 
             foreach (var cite in _moduleConfigEl.Elements())
             {
-                if (cite.Name == author)
+                if (cite.Name == key)
                 {
                     existingAuthor = true;
                     break;
@@ -168,7 +239,7 @@ namespace DiscordBot1
 
             if (!existingAuthor)
             {
-                _moduleConfigEl.Add(new XElement(author, filepath));
+                _moduleConfigEl.Add(new XElement(key, filepath));
 
                 await RaiseConfigChanged(_configEl);
 
