@@ -177,21 +177,21 @@ namespace DiscordBot1
                 {
                     CitationModule citationModule = new CitationModule(modulesEl, _adminIds, _clientId, _guildPath);
                     _modulesDict.Add(citationModule.StringID, citationModule);
-                    citationModule.ConfigChanged += CitationModule_ConfigChanged;
+                    citationModule.GuildBotConfigChanged += CitationModule_ConfigChanged;
                 }
 
                 if (modulesEl.Element("userimg") != null)
                 {
                     ImageModule imageModule = new ImageModule(modulesEl, _adminIds, _clientId, _guildPath);
                     _modulesDict.Add(imageModule.StringID, imageModule);
-                    imageModule.ConfigChanged += ImageModule_ConfigChanged;
+                    imageModule.GuildBotConfigChanged += ImageModule_ConfigChanged;
                 }
 
                 if (modulesEl.Element("archive") != null)
                 {
                     ArchiveModule archiveModule = new ArchiveModule(modulesEl, _adminIds, _guildPath, _guild);
                     _modulesDict.Add(archiveModule.StringID, archiveModule);
-                    archiveModule.ConfigChanged += ArchiveModule_ConfigChanged;
+                    archiveModule.GuildBotConfigChanged += ArchiveModule_ConfigChanged;
                     CtrlEvent += archiveModule.OnCtrlEvent;
                 }
             }

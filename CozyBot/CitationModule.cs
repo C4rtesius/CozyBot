@@ -10,16 +10,22 @@ using Discord.WebSocket;
 
 namespace DiscordBot1
 {
+    /// <summary>
+    /// ContentModule specialization - works with citations.
+    /// </summary>
     public class CitationModule : ContentModule
     {
         //Private Fields
 
+        /// <summary>
+        /// Used for Discord message limit check.
+        /// </summary>
         private static int _msgLengthLimit = 1980;
 
         /// <summary>
         /// Filename of module config.
         /// </summary>
-        // private static string _configFileName = "CitationModuleConfig.xml";
+        private static string _configFileName = "CitationModuleConfig.xml";
 
         /// <summary>
         /// String module Identifier.
@@ -27,7 +33,7 @@ namespace DiscordBot1
         private static string _stringID = "CitationModule";
 
         /// <summary>
-        /// Module name in Guild config.
+        /// Module name in Guild XML config.
         /// </summary>
         private static string _moduleXmlName = "usercite";
 
@@ -42,9 +48,11 @@ namespace DiscordBot1
         private static string _usageCountAttributeName = "used";
 
         /// <summary>
-        /// Guild working path.
+        /// Module XML config path.
         /// </summary>
-        private string _workingPath;
+        protected string _moduleConfigFilePath = String.Empty;
+
+        // Public Properties
 
         /// <summary>
         /// String module identifier.
@@ -52,9 +60,24 @@ namespace DiscordBot1
         public override string StringID { get { return _stringID; } }
 
         /// <summary>
-        /// Module name in Guild config.
+        /// Module name in Guild XML config.
         /// </summary>
         public override string ModuleXmlName { get { return _moduleXmlName; } }
+
+        /// <summary>
+        /// Module XML config path.
+        /// </summary>
+        public override string ModuleConfigFilePath
+        {
+            get
+            {
+                if (_moduleConfigFilePath == String.Empty)
+                {
+                    _moduleConfigFilePath = _guildPath + _configFileName;
+                }
+                return _moduleConfigFilePath;
+            }
+        }
 
         /// <summary>
         /// Citation module constructor.
@@ -64,17 +87,11 @@ namespace DiscordBot1
         /// <param name="clientId">Bot ID.</param>
         /// <param name="workingPath">Path to module working folder.</param>
         public CitationModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
-            : base (configEl, adminIds, clientId)
+            : base (configEl, adminIds, clientId, workingPath)
         {
-            _workingPath = workingPath ?? throw new ArgumentNullException("workingPath cannot be null!");
-
-            if (!Directory.Exists(_workingPath))
+            if (!Directory.Exists(_guildPath + _moduleFolder))
             {
-                Directory.CreateDirectory(_workingPath);
-            }
-            if (!Directory.Exists(_workingPath + _moduleFolder))
-            {
-                Directory.CreateDirectory(_workingPath + _moduleFolder);
+                Directory.CreateDirectory(_guildPath + _moduleFolder);
             }
         }
 
@@ -98,7 +115,7 @@ namespace DiscordBot1
 
                 XElement keyEl = null;
 
-                foreach (var el in _moduleConfigEl.Elements("key"))
+                foreach (var el in _moduleConfig.Root.Elements("key"))
                 {
                     if (String.Compare(el.Attribute("name").ToString(), key) == 0)
                     {
@@ -213,20 +230,20 @@ namespace DiscordBot1
                 citation += " ";
             }
 
-            string filepath = _workingPath + _moduleFolder + key + ".dat";
+            string filepath = _guildPath + _moduleFolder + key + ".dat";
             bool existingAuthor = false;
 
             await Task.Run(
                 () =>
                 {
-                    if (!Directory.Exists(_workingPath + _moduleFolder))
+                    if (!Directory.Exists(_guildPath + _moduleFolder))
                     {
-                        Directory.CreateDirectory(_workingPath + _moduleFolder);
+                        Directory.CreateDirectory(_guildPath + _moduleFolder);
                     }
                 }
             );
 
-            foreach (var cite in _moduleConfigEl.Elements())
+            foreach (var cite in _moduleConfig.Root.Elements())
             {
                 if (cite.Name == key)
                 {
@@ -239,11 +256,11 @@ namespace DiscordBot1
 
             if (!existingAuthor)
             {
-                _moduleConfigEl.Add(new XElement(key, filepath));
+                _moduleConfig.Root.Add(new XElement(key, filepath));
 
                 await RaiseConfigChanged(_configEl);
 
-                GenerateUseCommands(ExtractPermissions(_moduleConfigEl.Attribute("usePerm")));
+                GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
             }
 
             await msg.Channel.SendMessageAsync("Записав цитатку " + EmojiCodes.DankPepe);
@@ -267,7 +284,7 @@ namespace DiscordBot1
 
             string output = @"**Список доступних цитат :**" + Environment.NewLine + @"```";
 
-            foreach (var citeEl in _moduleConfigEl.Elements())
+            foreach (var citeEl in _moduleConfig.Root.Elements())
             {
                 output += Environment.NewLine + citeEl.Name.ToString();
             }
@@ -366,7 +383,7 @@ namespace DiscordBot1
 
             foreach (var citation in citationsToDelete)
             {
-                foreach (var citationEl in _moduleConfigEl.Elements())
+                foreach (var citationEl in _moduleConfig.Root.Elements())
                 {
                     if (citation == citationEl.Name.ToString())
                     {
@@ -381,7 +398,7 @@ namespace DiscordBot1
             {
                 await RaiseConfigChanged(_configEl);
 
-                GenerateUseCommands(ExtractPermissions(_moduleConfigEl.Attribute("usePerm")));
+                GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
                 string output = @"Видалив наступні цитати :" + Environment.NewLine + @"``` ";
                 foreach (var deleted in citationsDeleted)
                 {
@@ -394,6 +411,29 @@ namespace DiscordBot1
             else
             {
                 await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat);
+            }
+        }
+        
+        /// <summary>
+        /// Creates default module config XML file and writes file to disk.
+        /// </summary>
+        /// <param name="filePath">Config filepath.</param>
+        protected override void CreateDefaultModuleConfig(string filePath)
+        {
+            try
+            {
+                new XDocument(
+                    new XElement(ModuleXmlName,
+                        new XAttribute("cfgPerm", ""),
+                        new XAttribute("addPerm", ""),
+                        new XAttribute("usePerm", ""),
+                        new XAttribute("delPerm", "")
+                    )
+                ).Save(filePath);
+            }
+            catch
+            {
+                // TODO : Handle Exception
             }
         }
     }

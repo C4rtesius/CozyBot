@@ -1,8 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Xml;
 using System.Text;
 using System.Xml.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 using Discord.WebSocket;
 
@@ -66,7 +69,7 @@ namespace DiscordBot1
         /// <summary>
         /// XElement containing this module config.
         /// </summary>
-        protected XElement _moduleConfigEl;
+        protected XDocument _moduleConfig;
 
         /// <summary>
         /// Internal RNG.
@@ -79,9 +82,19 @@ namespace DiscordBot1
         protected event ConfigChanged _configChanged;
 
         /// <summary>
+        /// Lock object for module XML config file.
+        /// </summary>
+        protected object _moduleConfigLock = new object();
+
+        /// <summary>
+        /// Guild working path.
+        /// </summary>
+        protected string _guildPath;
+
+        /// <summary>
         /// Configuration Changed Event. Raised on changes to config.
         /// </summary>
-        public event ConfigChanged ConfigChanged
+        public event ConfigChanged GuildBotConfigChanged
         {
             add
             {
@@ -111,6 +124,11 @@ namespace DiscordBot1
         /// Module string identifier.
         /// </summary>
         public abstract string StringID { get; }
+
+        /// <summary>
+        /// Module XML config path.
+        /// </summary>
+        public abstract string ModuleConfigFilePath { get; }
 
         /// <summary>
         /// Module name in Guild config.
@@ -149,7 +167,13 @@ namespace DiscordBot1
         /// <param name="configEl">XElement containing guild's modules config.</param>
         /// <param name="adminIds">List of Guild Admins.</param>
         /// <param name="clientId">ID of Bot.</param>
-        public ContentModule(XElement configEl, List<ulong> adminIds, ulong clientId)
+        /// <param name="guildPath">Guild path.</param>
+        public ContentModule(
+            XElement configEl, 
+            List<ulong> adminIds, 
+            ulong clientId,
+            string guildPath
+            )
         {
             _configEl = configEl ?? throw new ArgumentNullException("Configuration Element cannot be null.");
 
@@ -157,19 +181,24 @@ namespace DiscordBot1
 
             _clientId = clientId;
 
-            if (_configEl.Element(ModuleXmlName) != null)
-            {
-                _moduleConfigEl = _configEl.Element(ModuleXmlName);
-            }
-            else
+            if (_configEl.Element(ModuleXmlName) == null)
             {
                 XElement moduleConfigEl =
                     new XElement(ModuleXmlName,
                         new XAttribute("on", Boolean.FalseString),
-                        new XAttribute("prefix", _defaultPrefix));
-                _moduleConfigEl = moduleConfigEl;
+                        new XAttribute("prefix", _defaultPrefix),
+                        ModuleConfigFilePath
+                    );
+                //_moduleConfigEl = moduleConfigEl;
 
                 _configEl.Add(moduleConfigEl);
+            }
+
+            _guildPath = guildPath ?? throw new ArgumentNullException("guildPath cannot be null!");
+
+            if (!Directory.Exists(_guildPath))
+            {
+                Directory.CreateDirectory(_guildPath);
             }
 
             Configure(_configEl);
@@ -223,13 +252,13 @@ namespace DiscordBot1
         /// <param name="configEl">XElement containing guild's modules config.</param>
         protected virtual void Configure(XElement configEl)
         {
-            XElement moduleCfgEl = configEl.Element(ModuleXmlName);
+            XElement guildBotModuleCfg = configEl.Element(ModuleXmlName);
 
             bool isActive = false;
 
-            if (moduleCfgEl.Attribute("on") != null)
+            if (guildBotModuleCfg.Attribute("on") != null)
             {
-                if (!Boolean.TryParse(moduleCfgEl.Attribute("on").Value, out isActive))
+                if (!Boolean.TryParse(guildBotModuleCfg.Attribute("on").Value, out isActive))
                 {
                     isActive = false;
                 }
@@ -239,15 +268,22 @@ namespace DiscordBot1
 
             string prefix = _defaultPrefix;
 
-            if (moduleCfgEl.Attribute("prefix") != null)
+            if (guildBotModuleCfg.Attribute("prefix") != null)
             {
-                if (!String.IsNullOrWhiteSpace(moduleCfgEl.Attribute("prefix").Value))
+                if (!String.IsNullOrWhiteSpace(guildBotModuleCfg.Attribute("prefix").Value))
                 {
-                    prefix = moduleCfgEl.Attribute("prefix").Value;
+                    prefix = guildBotModuleCfg.Attribute("prefix").Value;
                 }
             }
 
             _prefix = prefix;
+
+            if (!File.Exists(ModuleConfigFilePath))
+            {
+                CreateDefaultModuleConfig(ModuleConfigFilePath);
+            }
+
+            XElement moduleCfgEl = XDocument.Load(ModuleConfigFilePath).Root;
 
             if (moduleCfgEl.Attribute("cfgPerm") == null)
             {
@@ -286,6 +322,12 @@ namespace DiscordBot1
                 _delCommands = new List<IBotCommand>();
             }
         }
+
+        /// <summary>
+        /// Creates default module XML config file.
+        /// </summary>
+        /// <param name="filePath">Path to config file.</param>
+        protected abstract void CreateDefaultModuleConfig(string filePath);
 
         /// <summary>
         /// Generates module configuration commands from specified list of allowed role IDs.
@@ -359,7 +401,7 @@ namespace DiscordBot1
         {
             List<IBotCommand> useCommands = new List<IBotCommand>();
 
-            var keys = _moduleConfigEl.Elements("key");
+            var keys = _moduleConfig.Root.Elements("key");
 
             foreach (var keyEl in keys)
             {
@@ -455,19 +497,19 @@ namespace DiscordBot1
             switch (category)
             {
                 case "cfg":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("cfgPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("cfgPerm"), rolesIds);
                     GenerateCfgCommands(rolesIds);
                     break;
                 case "add":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("addPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("addPerm"), rolesIds);
                     GenerateAddCommands(rolesIds);
                     break;
                 case "use":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("usePerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("usePerm"), rolesIds);
                     GenerateUseCommands(rolesIds);
                     break;
                 case "del":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("delPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("delPerm"), rolesIds);
                     GenerateDelCommands(rolesIds);
                     break;
                 default:
@@ -494,11 +536,31 @@ namespace DiscordBot1
 
             attr.Value = newValue;
 
-            await RaiseConfigChanged(_configEl);
+            await ModuleConfigChanged();
         }
 
         /// <summary>
-        /// Config Changed Event wrapper.
+        /// Saves Module XML Config File.
+        /// </summary>
+        /// <returns></returns>
+        protected virtual async Task ModuleConfigChanged()
+        {
+            await Task.Run(
+                    () =>
+                    {
+                        lock(_moduleConfigLock)
+                        {
+                            _moduleConfig.Save(ModuleConfigFilePath);
+                        }
+                    }
+                );
+
+            //await RaiseConfigChanged(configEl);
+        }
+
+
+        /// <summary>
+        /// GuildBot Config Changed Event wrapper.
         /// </summary>
         /// <param name="configEl">New configuration.</param>
         /// <returns>Async task performing config change.</returns>

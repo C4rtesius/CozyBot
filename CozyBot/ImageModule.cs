@@ -11,28 +11,86 @@ using Discord.WebSocket;
 
 namespace DiscordBot1
 {
+    /// <summary>
+    /// ContentModule specialization - works with images(/video?).
+    /// </summary>
     public class ImageModule : ContentModule
     {
+        // Private Fields
+
+        /// <summary>
+        /// Used for Discord message limit check.
+        /// </summary>
         private const int _messageLimit = 1995;
 
+        /// <summary>
+        /// Filename of module config.
+        /// </summary>
+        private static string _configFileName = "ImageModuleConfig.xml";
+
+        /// <summary>
+        /// String module Identifier.
+        /// </summary>
         private static string _stringID = "ImageModule";
+
+        /// <summary>
+        /// Module name in Guild XML config.
+        /// </summary>
         private static string _moduleXmlName = "userimg";
-        private string _workingPath;
+
+        /// <summary>
+        /// Module working folder.
+        /// </summary>
+        private static string _moduleFolder = @"userimg\";
+
+        /// <summary>
+        /// Module XML config path.
+        /// </summary>
+        protected string _moduleConfigFilePath = String.Empty;
+
+        protected string _filesPath = String.Empty;
+
+        // Public Properties
+
+        /// <summary>
+        /// String module Identifier.
+        /// </summary>
         public override string StringID { get { return _stringID; } }
+
+        /// <summary>
+        /// Module name in Guild XML config.
+        /// </summary>
         public override string ModuleXmlName { get { return _moduleXmlName; } }
 
-        public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
-            : base(configEl, adminIds, clientId)
+        /// <summary>
+        /// Module XML config path.
+        /// </summary>
+        public override string ModuleConfigFilePath
         {
-            _workingPath = workingPath ?? throw new ArgumentNullException("workingPath cannot be null!");
-
-            if (!Directory.Exists(_workingPath))
+            get
             {
-                Directory.CreateDirectory(_workingPath);
+                if (_moduleConfigFilePath == String.Empty)
+                {
+                    _moduleConfigFilePath = _guildPath + _configFileName;
+                }
+                return _moduleConfigFilePath;
             }
-            if (!Directory.Exists(_workingPath + @"userimg\"))
+        }
+
+        /// <summary>
+        /// ImageModule constructor.
+        /// </summary>
+        /// <param name="configEl">XML Element containing Guild modules config.</param>
+        /// <param name="adminIds">IDs of Guild admins.</param>
+        /// <param name="clientId">Bot ID.</param>
+        /// <param name="workingPath">Path to module working folder.</param>
+        public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
+            : base(configEl, adminIds, clientId, workingPath)
+        {
+            _filesPath = _guildPath + _moduleFolder;
+            if (!Directory.Exists(_filesPath))
             {
-                Directory.CreateDirectory(_workingPath + @"userimg\");
+                Directory.CreateDirectory(_filesPath);
             }
         }
 
@@ -96,7 +154,7 @@ namespace DiscordBot1
 
         protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc)
         {
-            await DownloadFile(att, sc, _workingPath + @"userimg\" + att.Filename);
+            await DownloadFile(att, sc, _filesPath + att.Filename);
         }
 
         protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc, string filepath)
@@ -127,11 +185,11 @@ namespace DiscordBot1
             {
                 string imgName = words[1];
 
-                if (!Directory.Exists(_workingPath + @"userimg\"))
+                if (!Directory.Exists(_filesPath))
                 {
-                    Directory.CreateDirectory(_workingPath + @"userimg\");
+                    Directory.CreateDirectory(_filesPath);
                 }
-                foreach (var img in _moduleConfigEl.Elements())
+                foreach (var img in _moduleConfig.Root.Elements())
                 {
                     if (img.Name == words[1])
                     {
@@ -146,19 +204,19 @@ namespace DiscordBot1
                     {
                         if (RuleGenerator.IsImage(att))
                         {
-                            string filepath = _workingPath + @"userimg\" + att.Filename;
+                            string filepath = _filesPath + att.Filename;
 
                             if (File.Exists(filepath))
                             {
-                                filepath = _workingPath + @"userimg\" + Guid.NewGuid().ToString() + Path.GetExtension(att.Filename);
+                                filepath = _filesPath + Guid.NewGuid().ToString() + Path.GetExtension(att.Filename);
                             }
 
                             await DownloadFile(att, msg.Channel, filepath);
-                            _moduleConfigEl.Add(new XElement(imgName, filepath));
+                            _moduleConfig.Root.Add(new XElement(imgName, filepath));
 
                             await RaiseConfigChanged(_configEl);
 
-                            GenerateUseCommands(ExtractPermissions(_moduleConfigEl.Attribute("usePerm")));
+                            GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
 
                             break;
                         }
@@ -221,7 +279,7 @@ namespace DiscordBot1
             await Task.Run(
                 () =>
                 {
-                    var files = Directory.GetFiles(_workingPath + @"userimg\");
+                    var files = Directory.GetFiles(_filesPath);
                     foreach (var file in files)
                     {
                         if (file.EndsWith(".jpeg") ||
@@ -269,7 +327,7 @@ namespace DiscordBot1
 
             string name = String.Empty;
 
-            foreach (var citeEl in _moduleConfigEl.Elements())
+            foreach (var citeEl in _moduleConfig.Root.Elements())
             {
                 name = citeEl.Name.ToString();
 
@@ -385,7 +443,7 @@ namespace DiscordBot1
 
             foreach (var citation in imagesToDelete)
             {
-                foreach (var citationEl in _moduleConfigEl.Elements())
+                foreach (var citationEl in _moduleConfig.Root.Elements())
                 {
                     if (citation == citationEl.Name.ToString())
                     {
@@ -401,7 +459,7 @@ namespace DiscordBot1
             {
                 await RaiseConfigChanged(_configEl);
 
-                GenerateUseCommands(ExtractPermissions(_moduleConfigEl.Attribute("usePerm")));
+                GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
                 string output = @"Видалив наступні зображення :" + Environment.NewLine + @"```";
                 foreach (var deleted in imagesDeleted)
                 {
@@ -414,6 +472,29 @@ namespace DiscordBot1
             else
             {
                 await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat);
+            }
+        }
+
+        /// <summary>
+        /// Creates default module config XML file and writes file to disk.
+        /// </summary>
+        /// <param name="filePath">Config filepath.</param>
+        protected override void CreateDefaultModuleConfig(string filePath)
+        {
+            try
+            {
+                new XDocument(
+                    new XElement(ModuleXmlName,
+                        new XAttribute("cfgPerm", ""),
+                        new XAttribute("addPerm", ""),
+                        new XAttribute("usePerm", ""),
+                        new XAttribute("delPerm", "")
+                    )
+                ).Save(filePath);
+            }
+            catch
+            {
+                // TODO : Handle Exception
             }
         }
     }
