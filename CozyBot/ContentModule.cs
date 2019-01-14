@@ -401,31 +401,48 @@ namespace DiscordBot1
         {
             List<IBotCommand> useCommands = new List<IBotCommand>();
 
-            var keys = _moduleConfig.Root.Elements("key");
+            var stringKeys = RPKeyGenerator(_moduleConfig.Root, "");
 
-            foreach (var keyEl in keys)
+            foreach (var strKey in stringKeys)
             {
-                if (keyEl.Attribute("name") == null)
-                {
-                    continue;
-                }
-
-                string key = keyEl.Attribute("name").ToString();
-
                 List<ulong> allUsePerms = new List<ulong>(_adminIds);
                 allUsePerms.AddRange(perms);
                 Rule useRule = RuleGenerator.HasRoleByIds(allUsePerms)
-                    & RuleGenerator.PrefixatedCommand(_prefix, key)
+                    & RuleGenerator.PrefixatedCommand(_prefix, strKey)
                     & (!RuleGenerator.UserByID(_clientId));
 
                 useCommands.Add(
                     new BotCommand(
-                        StringID + "-" + key + "-usecmd",
+                        StringID + "-" + strKey + "-usecmd",
                         useRule,
-                        UseCommandGenerator(key)
+                        UseCommandGenerator(strKey)
                     )
                 );
             }
+
+            //foreach (var keyEl in keys)
+            //{
+            //    if (keyEl.Attribute("name") == null)
+            //    {
+            //        continue;
+            //    }
+
+            //    string key = keyEl.Attribute("name").ToString();
+
+            //    List<ulong> allUsePerms = new List<ulong>(_adminIds);
+            //    allUsePerms.AddRange(perms);
+            //    Rule useRule = RuleGenerator.HasRoleByIds(allUsePerms)
+            //        & RuleGenerator.PrefixatedCommand(_prefix, key)
+            //        & (!RuleGenerator.UserByID(_clientId));
+
+            //    useCommands.Add(
+            //        new BotCommand(
+            //            StringID + "-" + key + "-usecmd",
+            //            useRule,
+            //            UseCommandGenerator(key)
+            //        )
+            //    );
+            //}
 
             List<ulong> allHelpPerms = new List<ulong>(_adminIds);
             allHelpPerms.AddRange(perms);
@@ -454,6 +471,55 @@ namespace DiscordBot1
             );
 
             _useCommands = useCommands;
+        }
+
+        /// <summary>
+        /// Recursive Prefixated Key Generator.
+        /// </summary>
+        /// <param name="el">Element to search keys in.</param>
+        /// <param name="prev">Previous prefix.</param>
+        /// <returns>List of strings - valid prefixes for commands.</returns>
+        protected virtual List<string> RPKeyGenerator(XElement el, string prev)
+        {
+            List<string> results = new List<string>();
+
+            results.AddRange(RPKGenStubs(el, prev));
+
+            foreach (var key in el.Elements("key"))
+            {
+                if (key.Attribute("name") != null)
+                {
+                    string prefix = prev + key.Attribute("name").Value;
+                    results.Add(prefix);
+                    results.AddRange(RPKeyGenerator(key, prefix + "."));
+                }
+            }
+            return results;
+        }
+
+        /// <summary>
+        /// Recursive Prefixated Key Generator Item Stubs.
+        /// </summary>
+        /// <param name="el">Element to search for item stubs.</param>
+        /// <param name="prev">Previous prefix.</param>
+        /// <returns>List of strings - valid item references.</returns>
+        protected virtual List<string> RPKGenStubs(XElement el, string prev)
+        {
+            List<string> results = new List<string>();
+
+            foreach (var item in el.Elements("item"))
+            {
+                var temp = item.Attribute("name");
+                if (temp != null)
+                {
+                    if (!String.IsNullOrWhiteSpace(temp.Value))
+                    {
+                        results.Add(prev + temp.Value);
+                    }
+                }
+            }
+
+            return results;
         }
 
         /// <summary>

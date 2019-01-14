@@ -113,43 +113,80 @@ namespace DiscordBot1
                     // TODO: add logging or specify concrete Exception (?)
                 }
 
-                XElement keyEl = null;
+                XElement currentKeyEl = _moduleConfig.Root;
+                XElement subEl = null;
 
-                foreach (var el in _moduleConfig.Root.Elements("key"))
+                string[] keys = key.Split('.');
+
+                for (int i = 0; i < keys.Length; i++)
                 {
-                    if (String.Compare(el.Attribute("name").ToString(), key) == 0)
+                    subEl = null;
+
+                    foreach (var el in currentKeyEl.Elements("key"))
                     {
-                        keyEl = el;
-                        break;
+                        if (el.Attribute("name") != null)
+                        {
+                            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                            {
+                                subEl = el;
+                                break;
+                            }
+                        }
                     }
+                    if (subEl == null)
+                    {
+                        foreach (var el in currentKeyEl.Elements("item"))
+                        {
+                            if (el.Attribute("name") != null)
+                            {
+                                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                                {
+                                    subEl = el;
+                                }
+                            }
+                        }
+                    }
+                    if (subEl == null)
+                    {
+                        return;
+                    }
+                    currentKeyEl = subEl;
                 }
 
-                if (keyEl == null)
-                {
-                    return;
-                }
+                var citationsList = GetItemsFromTree(currentKeyEl);
 
-                var citationEls = new List<XElement>(keyEl.Elements("citation"));
+                //foreach (var el in _moduleConfig.Root.Elements("key"))
+                //{
+                //    if (String.Compare(el.Attribute("name").ToString(), key) == 0)
+                //    {
+                //        keyEl = el;
+                //        break;
+                //    }
+                //}
 
-                if (citationEls.Count == 0)
-                {
-                    return;
-                }
+                //if (keyEl == null)
+                //{
+                //    return;
+                //}
 
-                int selectedIndex = _rnd.Next() % citationEls.Count;
+                //var citationEls = new List<XElement>(keyEl.Elements("citation"));
 
-                string filepath = citationEls[selectedIndex].Value.ToString();
+                //if (citationEls.Count == 0)
+                //{
+                //    return;
+                //}
 
-                if (!File.Exists(filepath))
-                {
-                    return;
-                }
+                XElement citationEl = citationsList[_rnd.Next() % citationsList.Count];
+                string citationFileName = citationEl.Value;
 
                 string citation = String.Empty;
-
-                using (StreamReader sr = new StreamReader(filepath))
+                try
                 {
-                    citation = await sr.ReadToEndAsync();
+                    citation = File.ReadAllText(_moduleFolder + citationFileName);
+                }
+                catch
+                {
+                    return;
                 }
 
                 if (citation.Length > _msgLengthLimit)
@@ -171,16 +208,48 @@ namespace DiscordBot1
 
                 // Incrementing usage count.
 
-                if (keyEl.Attribute(_usageCountAttributeName) != null)
+                if (citationEl.Attribute(_usageCountAttributeName) != null)
                 {
-                    if (Int32.TryParse(keyEl.Attribute(_usageCountAttributeName).Value, out int uses))
+                    if (Int32.TryParse(citationEl.Attribute(_usageCountAttributeName).Value, out int uses))
                     {
                         uses++;
-                        keyEl.Attribute(_usageCountAttributeName).Value = uses.ToString();
-                        await RaiseConfigChanged(_configEl);
+                        citationEl.Attribute(_usageCountAttributeName).Value = uses.ToString();
+                    }
+                    else
+                    {
+                        citationEl.Attribute(_usageCountAttributeName).Value = 1.ToString();
                     }
                 }
+                else
+                {
+                    citationEl.Add(
+                        new XAttribute(
+                            _usageCountAttributeName, 1.ToString()
+                        )
+                    );
+                }
+
+                await ModuleConfigChanged();
             };
+        }
+
+        /// <summary>
+        /// Method for items extraction from tree.
+        /// </summary>
+        /// <param name="root">Root element from which to extract all items.</param>
+        /// <returns>List of all items in tree.</returns>
+        private List<XElement> GetItemsFromTree(XElement root)
+        {
+            List<XElement> result = new List<XElement>();
+            foreach(var el in root.Elements("item"))
+            {
+                result.Add(el);
+            }
+            foreach(var key in root.Elements("key"))
+            {
+                result.AddRange(GetItemsFromTree(key));
+            }
+            return result;
         }
 
         /// <summary>
@@ -221,47 +290,110 @@ namespace DiscordBot1
             }
 
             string key = words[1];
-            string citation = String.Empty;
+            string citation = msg.Content.Remove(0, msg.Content.IndexOf(words[0]) + words[0].Length);
+            citation = citation.Remove(0, citation.IndexOf(words[1]) + words[1].Length);
+            citation = citation.Remove(0, citation.IndexOf(words[2]));
 
+            Guid newItemGuid = new Guid();
 
-            for (int i = 2; i < words.Length; i++)
+            XElement newItem = 
+                new XElement(
+                    "item",
+                    new XAttribute("name", newItemGuid.ToString()),
+                    newItemGuid.ToString() + ".dat"
+                );
+
+            try
             {
-                citation += words[i];
-                citation += " ";
+                File.WriteAllText(_moduleFolder + newItemGuid.ToString() + ".dat", citation);
+            }
+            catch
+            {
+                return;
             }
 
-            string filepath = _guildPath + _moduleFolder + key + ".dat";
-            bool existingAuthor = false;
 
-            await Task.Run(
-                () =>
+            string[] keys = key.Split(key, '.');
+
+            XElement currentEl = _moduleConfig.Root;
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                XElement newEl = null;
+                foreach (var el in currentEl.Elements("key"))
                 {
-                    if (!Directory.Exists(_guildPath + _moduleFolder))
+                    if (el.Attribute("name") != null)
                     {
-                        Directory.CreateDirectory(_guildPath + _moduleFolder);
+                        if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                        {
+                            newEl = el;
+                            break;
+                        }
                     }
                 }
-            );
-
-            foreach (var cite in _moduleConfig.Root.Elements())
-            {
-                if (cite.Name == key)
+                if (newEl == null)
                 {
-                    existingAuthor = true;
-                    break;
+                    newEl =
+                        new XElement(
+                            "key",
+                            new XAttribute("name", key[i])
+                        );
+                    currentEl.Add(newEl);
                 }
+                currentEl = newEl;
             }
 
-            await SaveCitationToFile(filepath, citation);
+            currentEl.Add(newItem);
 
-            if (!existingAuthor)
+            try
             {
-                _moduleConfig.Root.Add(new XElement(key, filepath));
-
-                await RaiseConfigChanged(_configEl);
-
-                GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
+                await ModuleConfigChanged();
             }
+            catch
+            {
+                // TODO : Implement
+            }
+
+            //string filepath = _guildPath + _moduleFolder + key + ".dat";
+            //bool existingAuthor = false;
+
+            //await Task.Run(
+            //    () =>
+            //    {
+            //        if (!Directory.Exists(_guildPath + _moduleFolder))
+            //        {
+            //            Directory.CreateDirectory(_guildPath + _moduleFolder);
+            //        }
+            //    }
+            //);
+
+            //foreach (var cite in _moduleConfig.Root.Elements("citation"))
+            //{
+            //    if (String.Compare(cite.Attribute("name").ToString(), key) == 0)
+            //    {
+            //        existingAuthor = true;
+
+            //        break;
+            //    }
+            //}
+
+            //await SaveCitationToFile(filepath, citation);
+
+            //if (!existingAuthor)
+            //{
+            //    _moduleConfig.Root.Add(
+            //        new XElement(
+            //            "citation", 
+            //            new XAttribute("name", key),
+            //            new XAttribute(_usageCountAttributeName, 0.ToString()),
+            //            citation
+            //        )
+            //    );
+
+                //await RaiseConfigChanged(_configEl);
+
+            //    GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
+            //}
 
             await msg.Channel.SendMessageAsync("Записав цитатку " + EmojiCodes.DankPepe);
         }
