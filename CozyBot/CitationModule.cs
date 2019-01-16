@@ -1,9 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Xml.Linq;
 using System.Threading.Tasks;
-using System.IO;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 using Discord;
 using Discord.WebSocket;
@@ -46,6 +47,11 @@ namespace DiscordBot1
         /// String for citation usage count in XML.
         /// </summary>
         private static string _usageCountAttributeName = "used";
+
+        /// <summary>
+        /// Regex used in Add command parsing.
+        /// </summary>
+        private static string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)\s+(?<cite>[\s\S]+)$";
 
         /// <summary>
         /// Module XML config path.
@@ -182,7 +188,7 @@ namespace DiscordBot1
                 string citation = String.Empty;
                 try
                 {
-                    citation = File.ReadAllText(_moduleFolder + citationFileName);
+                    citation = File.ReadAllText(_guildPath + _moduleFolder + citationFileName);
                 }
                 catch
                 {
@@ -230,6 +236,7 @@ namespace DiscordBot1
                 }
 
                 await ModuleConfigChanged();
+                Reconfigure(_configEl);
             };
         }
 
@@ -282,38 +289,46 @@ namespace DiscordBot1
                 // TODO: add logging or specify concrete Exception (?)
             }
 
-            var words = msg.Content.Split(" ");
-
-            if (words.Length < 3)
+            if (!Regex.IsMatch(msg.Content, _addCommandRegex))
             {
                 return;
             }
 
-            string key = words[1];
-            string citation = msg.Content.Remove(0, msg.Content.IndexOf(words[0]) + words[0].Length);
-            citation = citation.Remove(0, citation.IndexOf(words[1]) + words[1].Length);
-            citation = citation.Remove(0, citation.IndexOf(words[2]));
+            var regexMatch = Regex.Match(msg.Content, _addCommandRegex);
 
-            Guid newItemGuid = new Guid();
+            //var words = msg.Content.Split(" ");
+
+            //if (words.Length < 3)
+            //{
+            //    return;
+            //}
+
+            //string key = words[1];
+            //string citation = msg.Content.Remove(0, msg.Content.IndexOf(words[0]) + words[0].Length);
+            //citation = citation.Remove(0, citation.IndexOf(words[1]) + words[1].Length);
+            //citation = citation.Remove(0, citation.IndexOf(words[2]));
+
+            Guid newItemGuid = Guid.NewGuid();
+
+            string newItemFileName = newItemGuid.ToString() + ".dat";
 
             XElement newItem = 
                 new XElement(
                     "item",
                     new XAttribute("name", newItemGuid.ToString()),
-                    newItemGuid.ToString() + ".dat"
+                    newItemFileName
                 );
 
             try
             {
-                File.WriteAllText(_moduleFolder + newItemGuid.ToString() + ".dat", citation);
+                File.WriteAllText(_guildPath + _moduleFolder + newItemFileName, regexMatch.Groups["cite"].Value);
             }
-            catch
+            catch (Exception ex)
             {
                 return;
             }
 
-
-            string[] keys = key.Split(key, '.');
+            string[] keys = regexMatch.Groups["key"].Value.Split('.');
 
             XElement currentEl = _moduleConfig.Root;
 
@@ -336,7 +351,7 @@ namespace DiscordBot1
                     newEl =
                         new XElement(
                             "key",
-                            new XAttribute("name", key[i])
+                            new XAttribute("name", keys[i])
                         );
                     currentEl.Add(newEl);
                 }
@@ -353,6 +368,8 @@ namespace DiscordBot1
             {
                 // TODO : Implement
             }
+
+            Reconfigure(_configEl);
 
             //string filepath = _guildPath + _moduleFolder + key + ".dat";
             //bool existingAuthor = false;

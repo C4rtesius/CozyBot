@@ -132,7 +132,8 @@ namespace DiscordBot1
                             new XAttribute("prefix", "i!")
                         ),
                         new XElement("archive",
-                            new XAttribute("on", Boolean.TrueString)
+                            new XAttribute("on", Boolean.TrueString),
+                            new XAttribute("prefix", "x!")
                         )
 
                     )

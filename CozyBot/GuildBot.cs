@@ -478,7 +478,7 @@ namespace DiscordBot1
                 foreach (var module in modulesProcessed)
                 {
                     _modulesDict[module].Reconfigure(_config.Root.Element("modules"));
-                    modulesString += module;
+                    modulesString += module + " ";
                 }
 
                 await SaveConfig();

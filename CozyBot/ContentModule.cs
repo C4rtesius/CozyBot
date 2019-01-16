@@ -283,7 +283,8 @@ namespace DiscordBot1
                 CreateDefaultModuleConfig(ModuleConfigFilePath);
             }
 
-            XElement moduleCfgEl = XDocument.Load(ModuleConfigFilePath).Root;
+            _moduleConfig = XDocument.Load(ModuleConfigFilePath);
+            XElement moduleCfgEl = _moduleConfig.Root;
 
             if (moduleCfgEl.Attribute("cfgPerm") == null)
             {
