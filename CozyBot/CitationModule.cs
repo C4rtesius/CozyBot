@@ -475,15 +475,28 @@ namespace DiscordBot1
                 return;
             }
             var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
-            var listRoot = GetRootByKey(regexMatch.Groups["key"].Value);
+
+            string keyStr = regexMatch.Groups["key"].Value;
+            var listRoot = GetRootByKey(keyStr);
 
             List<string> outputMsgs = new List<string>();
 
-            string output = @"**Список доступних цитат по підключу `" + 
-                regexMatch.Groups["key"].Value + @"` :**" + Environment.NewLine + @"```";
+            string output = @"**Список доступних цитат" 
+                + ((String.IsNullOrWhiteSpace(keyStr) ? "" : @" по підключу `" + keyStr + @"`")) 
+                + @" :**" + Environment.NewLine + @"```";
 
-            var list = RPKeyListGenerator(listRoot, regexMatch.Groups["key"].Value + ".");
-
+            var list = 
+                RPKeyListGenerator
+                (
+                    listRoot,
+                    String.IsNullOrWhiteSpace(keyStr) ? "" : keyStr + ".",
+                    false
+                );
+            if (list.Count == 0)
+            {
+                return;
+            }
+            list.Add(keyStr);
             foreach (var key in list)
             {
                 if (output.Length + key.Length < _msgLengthLimit)
@@ -537,18 +550,25 @@ namespace DiscordBot1
             }
 
             var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
+            var cmdKey = regexMatch.Groups["key"].Value;
 
-            var listRoot = GetRootByKey(regexMatch.Groups["key"].Value);
-
+            var listRoot = GetRootByKey(cmdKey);
             var itemsDict = new Dictionary<string, XElement>();
 
-            RPItemDictGenerator(listRoot, regexMatch.Groups["key"].Value + ".", itemsDict);
+            RPItemDictGenerator(
+                listRoot, 
+                String.IsNullOrWhiteSpace(cmdKey) ? "" : cmdKey + ".", 
+                itemsDict
+            );
 
             var ch = await msg.Author.GetOrCreateDMChannelAsync();
 
             List<string> outputMsgs = new List<string>();
 
-            string output = @"**Розширений список цитат за ключем " + regexMatch.Groups["key"].Value + " :**";
+            string output = @"**Розширений список цитат " 
+                + (String.IsNullOrWhiteSpace(cmdKey) ? "" : @"за ключем `" + cmdKey + @"` ")
+                + ":**";
+
             string citation = String.Empty;
             string keyStr = String.Empty;
 
@@ -719,45 +739,77 @@ namespace DiscordBot1
 
         protected override async Task DeleteCommand(SocketMessage msg)
         {
-            string msgContent = msg.Content;
-            string[] words = msgContent.Split(" ");
-
-            if (words.Length < 2)
+            if (!Regex.IsMatch(msg.Content, _listCommandRegex))
             {
-                await msg.Channel.SendMessageAsync(@"Видалити що ? " + EmojiCodes.WaitWhat);
+                return;
+            }
+            var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
+
+            string key = regexMatch.Groups["key"].Value;
+            if (String.IsNullOrWhiteSpace(key))
+            {
                 return;
             }
 
-            List<string> citationsToDelete = new List<string>();
+            var listRoot = GetRootByKey(key);
+            var delDict = new Dictionary<string, XElement>();
+
+            RPItemDictGenerator(listRoot, key + ".", delDict);
+
+            //string msgContent = msg.Content;
+            //string[] words = msgContent.Split(" ");
+
+            //if (words.Length < 2)
+            //{
+            //    await msg.Channel.SendMessageAsync(@"Видалити що ? " + EmojiCodes.WaitWhat);
+            //    return;
+            //}
+
             List<string> citationsDeleted = new List<string>();
 
-            for (int i = 1; i < words.Length; i++)
-            {
-                citationsToDelete.Add(words[i]);
-            }
+            //for (int i = 1; i < words.Length; i++)
+            //{
+            //    citationsToDelete.Add(words[i]);
+            //}
 
-            foreach (var citation in citationsToDelete)
+            foreach (var delKVP in delDict)
             {
-                foreach (var citationEl in _moduleConfig.Root.Elements())
+                DeleteItemRecursively(delKVP.Value);
+                citationsDeleted.Add(delKVP.Key);
+                try
                 {
-                    if (citation == citationEl.Name.ToString())
-                    {
-                        citationEl.Remove();
-                        citationsDeleted.Add(citation);
-                        break;
-                    }
+                    await Task.Run(() => File.Delete(
+                        _guildPath + _moduleFolder + delKVP.Value.Value));
+                }
+                catch
+                {
+                    //
                 }
             }
 
+            //foreach (var citation in citationsToDelete)
+            //{
+            //    foreach (var citationEl in _moduleConfig.Root.Elements())
+            //    {
+            //        if (citation == citationEl.Name.ToString())
+            //        {
+            //            citationEl.Remove();
+            //            citationsDeleted.Add(citation);
+            //            break;
+            //        }
+            //    }
+            //}
+
             if (citationsDeleted.Count > 0)
             {
-                await RaiseConfigChanged(_configEl);
-
-                GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
-                string output = @"Видалив наступні цитати :" + Environment.NewLine + @"``` ";
+                //await RaiseConfigChanged(_configEl);
+                await ModuleConfigChanged();
+                Reconfigure(_configEl);
+                //GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
+                string output = @"Видалив наступні цитати :" + Environment.NewLine + @"```";
                 foreach (var deleted in citationsDeleted)
                 {
-                    output += deleted + " ";
+                    output += deleted + Environment.NewLine;
                 }
                 output += "```" + Environment.NewLine + EmojiCodes.Pepe;
 
@@ -769,6 +821,44 @@ namespace DiscordBot1
             }
         }
         
+        protected virtual void DeleteItemRecursively(XElement el)
+        {
+            // TODO : rewrite ?
+
+            XElement parentEl = el.Parent;
+            foreach (var element in parentEl.Elements("item"))
+            {
+                if (element.Attribute("name") != el.Attribute("name"))
+                {
+                    el.Remove();
+                    return;
+                }
+            }
+            foreach (var element in parentEl.Elements("key"))
+            {
+                if (element.Attribute("name") != el.Attribute("name"))
+                {
+                    el.Remove();
+                    return;
+                }
+            }
+            if (parentEl.Name == _moduleXmlName)
+            {
+                el.Remove();
+            }
+            else
+            {
+                DeleteItemRecursively(parentEl);
+                el.Remove();
+            }
+            //if (   (parentEl.Element("item") == null) 
+            //    && (parentEl.Element("key ") == null)
+            //    && (parentEl.Name != _moduleXmlName))
+            //{
+            //    DeleteItemRecursively(parentEl);
+            //}
+        }
+
         /// <summary>
         /// Creates default module config XML file and writes file to disk.
         /// </summary>

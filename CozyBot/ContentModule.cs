@@ -402,7 +402,7 @@ namespace DiscordBot1
         {
             List<IBotCommand> useCommands = new List<IBotCommand>();
 
-            var stringKeys = RPKeyListGenerator(_moduleConfig.Root, "");
+            var stringKeys = RPKeyListGenerator(_moduleConfig.Root, "", true);
 
             foreach (var strKey in stringKeys)
             {
@@ -480,11 +480,17 @@ namespace DiscordBot1
         /// <param name="el">Element to search keys in.</param>
         /// <param name="prev">Previous prefix.</param>
         /// <returns>List of strings - valid prefixes for commands.</returns>
-        protected virtual List<string> RPKeyListGenerator(XElement el, string prev)
+        protected virtual List<string> RPKeyListGenerator(
+            XElement el, 
+            string prev,
+            bool includeItems
+        )
         {
             List<string> results = new List<string>();
-
-            results.AddRange(RPKLGenStubs(el, prev));
+            if (includeItems)
+            {
+                results.AddRange(RPKLGenStubs(el, prev));
+            }
 
             foreach (var key in el.Elements("key"))
             {
@@ -492,7 +498,7 @@ namespace DiscordBot1
                 {
                     string prefix = prev + key.Attribute("name").Value;
                     results.Add(prefix);
-                    results.AddRange(RPKeyListGenerator(key, prefix + "."));
+                    results.AddRange(RPKeyListGenerator(key, prefix + ".", includeItems));
                 }
             }
             return results;
