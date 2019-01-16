@@ -21,7 +21,7 @@ namespace DiscordBot1
         /// <summary>
         /// Used for Discord message limit check.
         /// </summary>
-        private static int _msgLengthLimit = 1980;
+        private static int _msgLengthLimit = 1800;
 
         /// <summary>
         /// Filename of module config.
@@ -54,9 +54,9 @@ namespace DiscordBot1
         private static string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)\s+(?<cite>[\s\S]+)$";
 
         /// <summary>
-        /// Regex used in VerboseList command parsing;
+        /// Regex used in List commands parsing;
         /// </summary>
-        private static string _vlistCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)?$";
+        private static string _listCommandRegex = @"^(?<pref>\S+)\s*(?<key>\S+)?$";
 
         /// <summary>
         /// Module XML config path.
@@ -256,7 +256,7 @@ namespace DiscordBot1
         /// </summary>
         /// <param name="root">Root element from which to extract all items.</param>
         /// <returns>List of all items in tree.</returns>
-        private List<XElement> GetItemsFromTree(XElement root)
+        private List<XElement> GetItemsByRoot(XElement root)
         {
             List<XElement> result = new List<XElement>();
             if (root.Name == "item")
@@ -269,7 +269,7 @@ namespace DiscordBot1
             }
             foreach(var key in root.Elements("key"))
             {
-                result.AddRange(GetItemsFromTree(key));
+                result.AddRange(GetItemsByRoot(key));
             }
             return result;
         }
@@ -470,24 +470,54 @@ namespace DiscordBot1
                 // TODO : add proper exception handling
             }
 
-            string output = @"**Список доступних цитат :**" + Environment.NewLine + @"```";
+            if (!Regex.IsMatch(msg.Content, _listCommandRegex))
+            {
+                return;
+            }
+            var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
+            var listRoot = GetRootByKey(regexMatch.Groups["key"].Value);
 
-            var list = RPKeyGenerator(_moduleConfig.Root, "");
+            List<string> outputMsgs = new List<string>();
+
+            string output = @"**Список доступних цитат по підключу `" + 
+                regexMatch.Groups["key"].Value + @"` :**" + Environment.NewLine + @"```";
+
+            var list = RPKeyListGenerator(listRoot, regexMatch.Groups["key"].Value + ".");
 
             foreach (var key in list)
             {
-                output += Environment.NewLine + key;
+                if (output.Length + key.Length < _msgLengthLimit)
+                {
+                    output += Environment.NewLine + key;
+                }
+                else
+                {
+                    output += @"```";
+                    outputMsgs.Add(output);
+                    output = @"```" + key;
+                }
             }
 
             output += @"```";
+            outputMsgs.Add(output);
 
             var ch = await msg.Author.GetOrCreateDMChannelAsync();
 
-            await ch.SendMessageAsync(output);
+            foreach (var outputMsg in outputMsgs)
+            {
+                await ch.SendMessageAsync(outputMsg);
+            }
 
             output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
 
-            await msg.Channel.SendMessageAsync(output);
+            try
+            {
+                await msg.Channel.SendMessageAsync(output);
+            }
+            catch
+            {
+                //
+            }
         }
 
         protected virtual async Task VerboseListCommand(SocketMessage msg)
@@ -501,22 +531,30 @@ namespace DiscordBot1
                 // TODO: add logging or specify concrete Exception (?)
             }
 
-            if (!Regex.IsMatch(msg.Content, _vlistCommandRegex))
+            if (!Regex.IsMatch(msg.Content, _listCommandRegex))
             {
                 return;
             }
 
-            var regexMatch = Regex.Match(msg.Content, _vlistCommandRegex);
+            var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
 
-            var itemsList = GetItemsListByKey(regexMatch.Groups["key"].Value);
+            var listRoot = GetRootByKey(regexMatch.Groups["key"].Value);
+
+            var itemsDict = new Dictionary<string, XElement>();
+
+            RPItemDictGenerator(listRoot, regexMatch.Groups["key"].Value + ".", itemsDict);
 
             var ch = await msg.Author.GetOrCreateDMChannelAsync();
 
-            string citation;
+            List<string> outputMsgs = new List<string>();
 
-            foreach (var item in itemsList)
+            string output = @"**Розширений список цитат за ключем " + regexMatch.Groups["key"].Value + " :**";
+            string citation = String.Empty;
+            string keyStr = String.Empty;
+
+            foreach (var kvp in itemsDict)
             {
-                string citationFileName = item.Value;
+                string citationFileName = kvp.Value.Value;
 
                 try
                 {
@@ -530,43 +568,52 @@ namespace DiscordBot1
                 {
                     continue;
                 }
-                try
+                keyStr = @"`" + kvp.Key + @"` :";
+                if (output.Length + keyStr.Length + citation.Length < _msgLengthLimit)
                 {
-                    await ch.SendMessageAsync(@"`" + item.Attribute("name").Value + @"` :");
-                    await ch.SendMessageAsync(citation);
+                    output += Environment.NewLine + keyStr;
+                    output += Environment.NewLine + citation;
                 }
-                catch
+                else
                 {
-                    continue;
+                    outputMsgs.Add(output);
+                    output = keyStr + Environment.NewLine + citation;
                 }
+            }
+
+            outputMsgs.Add(output);
+
+            foreach (var outputMsg in outputMsgs)
+            {
+                await ch.SendMessageAsync(outputMsg);
+            }
+
+            var pingMsg = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
+            try
+            {
+                await msg.Channel.SendMessageAsync(pingMsg);
+            }
+            catch
+            {
+                //
             }
         }
 
-        protected virtual List<XElement> GetItemsListByKey(string key)
+        protected virtual XElement GetRootByKey(string key)
         {
             XElement currentKeyEl = _moduleConfig.Root;
-            XElement subEl = null;
 
-            string[] keys = key.Split('.');
-
-            for (int i = 0; i < keys.Length; i++)
+            if (key != String.Empty)
             {
-                subEl = null;
+                XElement subEl = null;
 
-                foreach (var el in currentKeyEl.Elements("key"))
+                string[] keys = key.Split('.');
+
+                for (int i = 0; i < keys.Length; i++)
                 {
-                    if (el.Attribute("name") != null)
-                    {
-                        if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
-                        {
-                            subEl = el;
-                            break;
-                        }
-                    }
-                }
-                if (subEl == null)
-                {
-                    foreach (var el in currentKeyEl.Elements("item"))
+                    subEl = null;
+
+                    foreach (var el in currentKeyEl.Elements("key"))
                     {
                         if (el.Attribute("name") != null)
                         {
@@ -577,15 +624,34 @@ namespace DiscordBot1
                             }
                         }
                     }
+                    if (subEl == null)
+                    {
+                        foreach (var el in currentKeyEl.Elements("item"))
+                        {
+                            if (el.Attribute("name") != null)
+                            {
+                                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                                {
+                                    subEl = el;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (subEl == null)
+                    {
+                        return null;
+                    }
+                    currentKeyEl = subEl;
                 }
-                if (subEl == null)
-                {
-                    return new List<XElement>();
-                }
-                currentKeyEl = subEl;
             }
+            return currentKeyEl;
+        }
 
-            return GetItemsFromTree(currentKeyEl);
+        protected virtual List<XElement> GetItemsListByKey(string key)
+        {
+            var root = GetRootByKey(key);
+            return (root != null) ? GetItemsByRoot(root) : new List<XElement>();
         }
 
 

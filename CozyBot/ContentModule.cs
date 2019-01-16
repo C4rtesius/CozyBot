@@ -402,7 +402,7 @@ namespace DiscordBot1
         {
             List<IBotCommand> useCommands = new List<IBotCommand>();
 
-            var stringKeys = RPKeyGenerator(_moduleConfig.Root, "");
+            var stringKeys = RPKeyListGenerator(_moduleConfig.Root, "");
 
             foreach (var strKey in stringKeys)
             {
@@ -480,11 +480,11 @@ namespace DiscordBot1
         /// <param name="el">Element to search keys in.</param>
         /// <param name="prev">Previous prefix.</param>
         /// <returns>List of strings - valid prefixes for commands.</returns>
-        protected virtual List<string> RPKeyGenerator(XElement el, string prev)
+        protected virtual List<string> RPKeyListGenerator(XElement el, string prev)
         {
             List<string> results = new List<string>();
 
-            results.AddRange(RPKGenStubs(el, prev));
+            results.AddRange(RPKLGenStubs(el, prev));
 
             foreach (var key in el.Elements("key"))
             {
@@ -492,7 +492,7 @@ namespace DiscordBot1
                 {
                     string prefix = prev + key.Attribute("name").Value;
                     results.Add(prefix);
-                    results.AddRange(RPKeyGenerator(key, prefix + "."));
+                    results.AddRange(RPKeyListGenerator(key, prefix + "."));
                 }
             }
             return results;
@@ -504,7 +504,7 @@ namespace DiscordBot1
         /// <param name="el">Element to search for item stubs.</param>
         /// <param name="prev">Previous prefix.</param>
         /// <returns>List of strings - valid item references.</returns>
-        protected virtual List<string> RPKGenStubs(XElement el, string prev)
+        protected virtual List<string> RPKLGenStubs(XElement el, string prev)
         {
             List<string> results = new List<string>();
 
@@ -522,6 +522,44 @@ namespace DiscordBot1
 
             return results;
         }
+
+        protected virtual void RPItemDictGenerator(
+            XElement el,
+            string prev,
+            Dictionary<string, XElement> dict
+        )
+        {
+            RPIDGenStub(el, prev, dict);
+
+            foreach(var key in el.Elements("key"))
+            {
+                if (key.Attribute("name") != null)
+                {
+                    string prefix = prev + key.Attribute("name").Value;
+                    RPItemDictGenerator(key, prefix + ".", dict);
+                }
+            }
+        }
+
+        protected virtual void RPIDGenStub(
+            XElement el,
+            string prev,
+            Dictionary<string, XElement> dict
+        )
+        {
+            foreach (var item in el.Elements("item"))
+            {
+                var temp = item.Attribute("name");
+                if (temp != null)
+                {
+                    if (!String.IsNullOrWhiteSpace(temp.Value))
+                    {
+                        dict.Add(prev + temp.Value, item);
+                    }
+                }
+            }
+        }
+
 
         /// <summary>
         /// Module configuration command.
