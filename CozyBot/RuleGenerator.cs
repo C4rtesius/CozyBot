@@ -86,6 +86,7 @@ namespace DiscordBot1
                     string text = msg.Content;
                     if (text.StartsWith(prefix))
                     {
+                        // TODO : rewrite using regex
                         string deprefixed = text.Remove(0, prefix.Length);
                         string[] words = deprefixed.Split(" ");
                         if (String.Compare(cmdName, words[0]) == 0)

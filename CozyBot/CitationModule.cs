@@ -54,6 +54,11 @@ namespace DiscordBot1
         private static string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)\s+(?<cite>[\s\S]+)$";
 
         /// <summary>
+        /// Regex used in VerboseList command parsing;
+        /// </summary>
+        private static string _vlistCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)?$";
+
+        /// <summary>
         /// Module XML config path.
         /// </summary>
         protected string _moduleConfigFilePath = String.Empty;
@@ -119,47 +124,53 @@ namespace DiscordBot1
                     // TODO: add logging or specify concrete Exception (?)
                 }
 
-                XElement currentKeyEl = _moduleConfig.Root;
-                XElement subEl = null;
-
-                string[] keys = key.Split('.');
-
-                for (int i = 0; i < keys.Length; i++)
+                var citationsList = GetItemsListByKey(key);
+                if (citationsList.Count == 0)
                 {
-                    subEl = null;
-
-                    foreach (var el in currentKeyEl.Elements("key"))
-                    {
-                        if (el.Attribute("name") != null)
-                        {
-                            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
-                            {
-                                subEl = el;
-                                break;
-                            }
-                        }
-                    }
-                    if (subEl == null)
-                    {
-                        foreach (var el in currentKeyEl.Elements("item"))
-                        {
-                            if (el.Attribute("name") != null)
-                            {
-                                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
-                                {
-                                    subEl = el;
-                                }
-                            }
-                        }
-                    }
-                    if (subEl == null)
-                    {
-                        return;
-                    }
-                    currentKeyEl = subEl;
+                    return;
                 }
+                //XElement currentKeyEl = _moduleConfig.Root;
+                //XElement subEl = null;
 
-                var citationsList = GetItemsFromTree(currentKeyEl);
+                //string[] keys = key.Split('.');
+
+                //for (int i = 0; i < keys.Length; i++)
+                //{
+                //    subEl = null;
+
+                //    foreach (var el in currentKeyEl.Elements("key"))
+                //    {
+                //        if (el.Attribute("name") != null)
+                //        {
+                //            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                //            {
+                //                subEl = el;
+                //                break;
+                //            }
+                //        }
+                //    }
+                //    if (subEl == null)
+                //    {
+                //        foreach (var el in currentKeyEl.Elements("item"))
+                //        {
+                //            if (el.Attribute("name") != null)
+                //            {
+                //                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                //                {
+                //                    subEl = el;
+                //                    break;
+                //                }
+                //            }
+                //        }
+                //    }
+                //    if (subEl == null)
+                //    {
+                //        return;
+                //    }
+                //    currentKeyEl = subEl;
+                //}
+
+                //var citationsList = GetItemsFromTree(currentKeyEl);
 
                 //foreach (var el in _moduleConfig.Root.Elements("key"))
                 //{
@@ -248,6 +259,10 @@ namespace DiscordBot1
         private List<XElement> GetItemsFromTree(XElement root)
         {
             List<XElement> result = new List<XElement>();
+            if (root.Name == "item")
+            {
+                result.Add(root);
+            }
             foreach(var el in root.Elements("item"))
             {
                 result.Add(el);
@@ -323,7 +338,7 @@ namespace DiscordBot1
             {
                 File.WriteAllText(_guildPath + _moduleFolder + newItemFileName, regexMatch.Groups["cite"].Value);
             }
-            catch (Exception ex)
+            catch //(Exception ex)
             {
                 return;
             }
@@ -423,19 +438,45 @@ namespace DiscordBot1
             }
         }
 
+        protected override void GenerateUseCommands(List<ulong> perms)
+        {
+            // Generate base use commands from ContentModule
+            base.GenerateUseCommands(perms);
+
+            // Add verbose listing command
+
+            List<ulong> allListPerms = new List<ulong>(_adminIds);
+            allListPerms.AddRange(perms);
+            Rule listRule = RuleGenerator.HasRoleByIds(allListPerms)
+                & RuleGenerator.PrefixatedCommand(_prefix, "vlist");
+
+            _useCommands.Add(
+                new BotCommand(
+                    StringID + "-listcmd",
+                    listRule,
+                    VerboseListCommand
+                )
+            );
+        }
+
         protected override async Task ListCommand(SocketMessage msg)
         {
             try
             {
                 await msg.DeleteAsync();
             }
-            catch { }
+            catch
+            {
+                // TODO : add proper exception handling
+            }
 
             string output = @"**Список доступних цитат :**" + Environment.NewLine + @"```";
 
-            foreach (var citeEl in _moduleConfig.Root.Elements())
+            var list = RPKeyGenerator(_moduleConfig.Root, "");
+
+            foreach (var key in list)
             {
-                output += Environment.NewLine + citeEl.Name.ToString();
+                output += Environment.NewLine + key;
             }
 
             output += @"```";
@@ -448,6 +489,105 @@ namespace DiscordBot1
 
             await msg.Channel.SendMessageAsync(output);
         }
+
+        protected virtual async Task VerboseListCommand(SocketMessage msg)
+        {
+            try
+            {
+                await msg.DeleteAsync();
+            }
+            catch
+            {
+                // TODO: add logging or specify concrete Exception (?)
+            }
+
+            if (!Regex.IsMatch(msg.Content, _vlistCommandRegex))
+            {
+                return;
+            }
+
+            var regexMatch = Regex.Match(msg.Content, _vlistCommandRegex);
+
+            var itemsList = GetItemsListByKey(regexMatch.Groups["key"].Value);
+
+            var ch = await msg.Author.GetOrCreateDMChannelAsync();
+
+            string citation;
+
+            foreach (var item in itemsList)
+            {
+                string citationFileName = item.Value;
+
+                try
+                {
+                    citation = File.ReadAllText(_guildPath + _moduleFolder + citationFileName);
+                }
+                catch
+                {
+                    continue;
+                }
+                if (citation.Length > _msgLengthLimit)
+                {
+                    continue;
+                }
+                try
+                {
+                    await ch.SendMessageAsync(@"`" + item.Attribute("name").Value + @"` :");
+                    await ch.SendMessageAsync(citation);
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+        }
+
+        protected virtual List<XElement> GetItemsListByKey(string key)
+        {
+            XElement currentKeyEl = _moduleConfig.Root;
+            XElement subEl = null;
+
+            string[] keys = key.Split('.');
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                subEl = null;
+
+                foreach (var el in currentKeyEl.Elements("key"))
+                {
+                    if (el.Attribute("name") != null)
+                    {
+                        if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                        {
+                            subEl = el;
+                            break;
+                        }
+                    }
+                }
+                if (subEl == null)
+                {
+                    foreach (var el in currentKeyEl.Elements("item"))
+                    {
+                        if (el.Attribute("name") != null)
+                        {
+                            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                            {
+                                subEl = el;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (subEl == null)
+                {
+                    return new List<XElement>();
+                }
+                currentKeyEl = subEl;
+            }
+
+            return GetItemsFromTree(currentKeyEl);
+        }
+
 
         protected override async Task HelpCommand(SocketMessage msg)
         {
@@ -467,9 +607,9 @@ namespace DiscordBot1
 
                 var eba = new EmbedAuthorBuilder
                 {
-                    Name = @"Shining Armor",
-                    IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
-                };
+                    Name = guild.GetUser(_clientId).Username,
+                    IconUrl = guild.GetUser(_clientId).GetAvatarUrl()
+            };
 
                 var efb = new EmbedFieldBuilder
                 {
