@@ -404,11 +404,13 @@ namespace DiscordBot1
 
             var stringKeys = RPKeyListGenerator(_moduleConfig.Root, "", true);
 
+            List<ulong> allUsePerms = new List<ulong>(_adminIds);
+            allUsePerms.AddRange(perms);
+            Rule useRule;
             foreach (var strKey in stringKeys)
             {
-                List<ulong> allUsePerms = new List<ulong>(_adminIds);
-                allUsePerms.AddRange(perms);
-                Rule useRule = RuleGenerator.HasRoleByIds(allUsePerms)
+
+                useRule = RuleGenerator.HasRoleByIds(allUsePerms)
                     & RuleGenerator.PrefixatedCommand(_prefix, strKey)
                     & (!RuleGenerator.UserByID(_clientId));
 
@@ -420,6 +422,18 @@ namespace DiscordBot1
                     )
                 );
             }
+            useRule = RuleGenerator.HasRoleByIds(allUsePerms)
+                & RuleGenerator.PrefixatedCommand(_prefix, String.Empty)
+                & (!RuleGenerator.UserByID(_clientId));
+
+            // to support empty prefix commands e.g. c! or i!
+            useCommands.Add(
+                new BotCommand(
+                    StringID + "-usecmd",
+                        useRule,
+                        UseCommandGenerator(String.Empty)
+                    )
+            );
 
             //foreach (var keyEl in keys)
             //{

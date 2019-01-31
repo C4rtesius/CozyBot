@@ -63,6 +63,16 @@ namespace DiscordBot1
         /// </summary>
         protected string _moduleConfigFilePath = String.Empty;
 
+        protected string[] _blacklistedKeys = new string[]
+        {
+            "add",
+            "list",
+            "vlist",
+            "help",
+            "cfg",
+            "del"
+        };
+
         // Public Properties
 
         /// <summary>
@@ -323,6 +333,17 @@ namespace DiscordBot1
             //citation = citation.Remove(0, citation.IndexOf(words[1]) + words[1].Length);
             //citation = citation.Remove(0, citation.IndexOf(words[2]));
 
+            string[] keys = regexMatch.Groups["key"].Value.Split('.');
+            
+            // check for blacklisted keys
+            foreach (var blKey in _blacklistedKeys)
+            {
+                if (String.Compare(keys[0], blKey) == 0)
+                {
+                    return;
+                }
+            }
+
             Guid newItemGuid = Guid.NewGuid();
 
             string newItemFileName = newItemGuid.ToString() + ".dat";
@@ -343,7 +364,6 @@ namespace DiscordBot1
                 return;
             }
 
-            string[] keys = regexMatch.Groups["key"].Value.Split('.');
 
             XElement currentEl = _moduleConfig.Root;
 
@@ -469,6 +489,8 @@ namespace DiscordBot1
             {
                 // TODO : add proper exception handling
             }
+
+            // TODO : fix `c!list key` when key contains only 1 item
 
             if (!Regex.IsMatch(msg.Content, _listCommandRegex))
             {
