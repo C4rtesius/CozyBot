@@ -8,16 +8,19 @@
   <ItemGroup>
     <Compile Remove="334771623049822220\**" />
     <Compile Remove="455870602813767680\**" />
+    <Compile Remove="508416694411067442\**" />
     <Compile Remove="cite\**" />
     <Compile Remove="img\**" />
     <Compile Remove="userimg\**" />
     <EmbeddedResource Remove="334771623049822220\**" />
     <EmbeddedResource Remove="455870602813767680\**" />
+    <EmbeddedResource Remove="508416694411067442\**" />
     <EmbeddedResource Remove="cite\**" />
     <EmbeddedResource Remove="img\**" />
     <EmbeddedResource Remove="userimg\**" />
     <None Remove="334771623049822220\**" />
     <None Remove="455870602813767680\**" />
+    <None Remove="508416694411067442\**" />
     <None Remove="cite\**" />
     <None Remove="img\**" />
     <None Remove="userimg\**" />
@@ -34,7 +37,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Discord.Net" Version="2.0.0-beta" />
+    <PackageReference Include="Discord.Net" Version="2.0.1" />
   </ItemGroup>
 
 </Project>
