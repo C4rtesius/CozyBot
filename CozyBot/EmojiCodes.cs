@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public static class EmojiCodes
     {

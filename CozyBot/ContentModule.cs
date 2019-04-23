@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     /// <summary>
     /// Abstract Class describes user content, which can be saved and posted by bot.
