@@ -19,6 +19,8 @@ namespace DiscordBot1
 
         private static string _stringID = "ArchiveModule";
         private static string _moduleXmlName = "archive";
+        private static string _listFormat = "`{0,-25}Timer: {1,-6}Interval: {2,-6}Image: {3,-6}Last: {4,-20}Silent: {5,-6}`\n";
+
         private string _workingPath;
         private int _minimumInterval =  1; // minutes = 1 min
         private int _defaultInterval = 60; // minutes = 1 hour
@@ -907,14 +909,22 @@ namespace DiscordBot1
 
             var asyncMessages = textChannel.GetMessagesAsync();
             var enumerator = asyncMessages.GetEnumerator();
-
-            while (await enumerator.MoveNext())
+            try
             {
-                foreach (var message in enumerator.Current)
+                while (await enumerator.MoveNext())
                 {
-                    list.Add(message);
+                    foreach (var message in enumerator.Current)
+                    {
+                        list.Add(message);
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine(textChannel.Name);
+                throw ex;
+            }
+
             return list;
         }
 
@@ -925,12 +935,26 @@ namespace DiscordBot1
             var asyncMessages = textChannel.GetMessagesAsync(from, direction);
             var enumerator = asyncMessages.GetEnumerator();
 
-            while (await enumerator.MoveNext())
+            // 23.04.2019
+            // There exists a bug (?!) when enumerator stumbles upon 
+            // osu! spectator invite (finished ?), it throws an exception and
+            // everything breaks.
+            // Cannot/do not want to reproduce it atm.
+
+            try
             {
-                foreach (var message in enumerator.Current)
+                while (await enumerator.MoveNext())
                 {
-                    list.Add(message);
+                    foreach (var message in enumerator.Current)
+                    {
+                        list.Add(message);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(textChannel.Name);
+                throw ex;
             }
             return list;
         }
@@ -942,6 +966,10 @@ namespace DiscordBot1
 
             if (words[1] == "list")
             {
+                //Debug
+                //ulong id = 0;
+                //try
+                //{
                 List<string> outputMsgs = new List<string>();
 
                 string output = String.Empty;
@@ -953,12 +981,21 @@ namespace DiscordBot1
                         output = String.Empty;
                     }
 
-                    output += _guild.GetChannel(kvp.Key).Name;
-                    output += "\tTimer:\t" + kvp.Value.Timer;
-                    output += "\tInterval:\t" + kvp.Value.Interval;
-                    output += "\tImage:\t" + kvp.Value.Image;
-                    output += "\tLast:\t" + kvp.Value.Last;
-                    output += "\tSilent:\t" + kvp.Value.Silent + Environment.NewLine;
+                    // Debug
+                    //id = kvp.Key;
+
+                    if (_guild.GetChannel(kvp.Key) != null)
+                    {
+                        output += String.Format(
+                            _listFormat,
+                            _guild.GetChannel(kvp.Key).Name,
+                            kvp.Value.Timer,
+                            kvp.Value.Interval,
+                            kvp.Value.Image,
+                            kvp.Value.Last,
+                            kvp.Value.Silent
+                        );
+                    }
                 }
 
                 outputMsgs.Add(output);
@@ -967,6 +1004,14 @@ namespace DiscordBot1
                 {
                     await msg.Channel.SendMessageAsync(outputMsg);
                 }
+                //}
+                //    catch (Exception ex)
+                //    {
+                //        // Debug
+                //        Console.WriteLine(id);
+                //        Console.WriteLine(ex.Message);
+                //        Console.WriteLine(ex.StackTrace);
+                //    }
             }
 
             if ((words[1] == "perm") && words.Length > 3)
