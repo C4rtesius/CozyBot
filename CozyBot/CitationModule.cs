@@ -8,7 +8,7 @@ using System.IO;
 using Discord;
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public class CitationModule : ContentModule
     {

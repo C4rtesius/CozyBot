@@ -5,7 +5,7 @@ using System.Text;
 using Discord;
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public static class RuleGenerator
     {

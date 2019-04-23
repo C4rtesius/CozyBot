@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public class BotCommand : IBotCommand
     {

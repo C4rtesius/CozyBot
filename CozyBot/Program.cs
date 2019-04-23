@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 using Discord;
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public class Program 
     {

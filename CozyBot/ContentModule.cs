@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public abstract class ContentModule : IBotModule
     {
