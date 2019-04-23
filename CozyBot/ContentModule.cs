@@ -422,9 +422,9 @@ namespace DiscordBot1
                     )
                 );
             }
-            useRule = RuleGenerator.HasRoleByIds(allUsePerms)
-                & RuleGenerator.PrefixatedCommand(_prefix, String.Empty)
-                & (!RuleGenerator.UserByID(_clientId));
+            useRule = RuleGenerator.HasRoleByIds(allUsePerms) &
+                RuleGenerator.TextIdentity(_prefix) &
+                (!RuleGenerator.UserByID(_clientId));
 
             // to support empty prefix commands e.g. c! or i!
             useCommands.Add(

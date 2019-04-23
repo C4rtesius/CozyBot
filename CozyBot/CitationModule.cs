@@ -63,6 +63,9 @@ namespace DiscordBot1
         /// </summary>
         protected string _moduleConfigFilePath = String.Empty;
 
+        /// <summary>
+        /// Forbidden keys (because they are valid commands).
+        /// </summary>
         protected string[] _blacklistedKeys = new string[]
         {
             "add",

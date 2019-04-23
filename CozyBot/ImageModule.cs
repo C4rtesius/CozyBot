@@ -21,7 +21,7 @@ namespace DiscordBot1
         /// <summary>
         /// Used for Discord message limit check.
         /// </summary>
-        private const int _messageLimit = 1995;
+        private const int _messageLimit = 1800;
 
         /// <summary>
         /// Filename of module config.
@@ -44,11 +44,27 @@ namespace DiscordBot1
         private static string _moduleFolder = @"userimg\";
 
         /// <summary>
+        /// String for citation usage count in XML.
+        /// </summary>
+        private static string _usageCountAttributeName = "used";
+
+        /// <summary>
         /// Module XML config path.
         /// </summary>
         protected string _moduleConfigFilePath = String.Empty;
 
-        protected string _filesPath = String.Empty;
+        /// <summary>
+        /// Forbidden keys (because they are valid commands).
+        /// </summary>
+        protected string[] _blacklistedKeys = new string[]
+        {
+            "add",
+            "list",
+            "vlist",
+            "help",
+            "cfg",
+            "del"
+        };
 
         // Public Properties
 
@@ -87,14 +103,17 @@ namespace DiscordBot1
         public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
             : base(configEl, adminIds, clientId, workingPath)
         {
-            _filesPath = _guildPath + _moduleFolder;
-            if (!Directory.Exists(_filesPath))
+            if (!Directory.Exists(_guildPath + _moduleFolder))
             {
-                Directory.CreateDirectory(_filesPath);
+                Directory.CreateDirectory(_guildPath + _moduleFolder);
             }
         }
 
-
+        /// <summary>
+        /// Send file command generator.
+        /// </summary>
+        /// <param name="filePath">Path to file to send.</param>
+        /// <returns>Async function sending specified file to SocketMessage channel.</returns>
         public static Func<SocketMessage, Task> SendFileCommandGenerator(string filePath)
         {
             return async (msg) =>
@@ -102,15 +121,19 @@ namespace DiscordBot1
                 try
                 {
                     await msg.DeleteAsync();
+                    await msg.Channel.SendFileAsync(filePath);
                 }
                 catch
                 {
-
+                    // TODO : Implement logging / specific catching.
                 }
-                await msg.Channel.SendFileAsync(filePath);
             };
         }
 
+        /// <summary>
+        /// Generates addition commands and adds them to module commands list.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Add commands.</param>
         protected override void GenerateAddCommands(List<ulong> perms)
         {
             base.GenerateAddCommands(perms);
@@ -133,13 +156,25 @@ namespace DiscordBot1
             _addCommands.Add(addCmd);
         }
 
+        /// <summary>
+        /// Downloads Images from input SocketMessage.
+        /// </summary>
+        /// <param name="msg">SocketMessage containing image.</param>
+        /// <returns>Async Task performing job.</returns>
         protected async Task DownloadImagesCommand(SocketMessage msg)
         {
             foreach (var att in msg.Attachments)
             {
                 if (RuleGenerator.IsImage(att))
                 {
-                    await DownloadFile(att, msg.Channel);
+                    try
+                    {
+                        await DownloadFile(att, msg.Channel);
+                    }
+                    catch
+                    {
+                        // TODO : Implement logging/exception handling
+                    }
                 }
             }
 
@@ -153,9 +188,15 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// Downloads Image from Attachment.
+        /// </summary>
+        /// <param name="att">Attachment containing image.</param>
+        /// <param name="sc">ISocketMessageChannel ...</param>
+        /// <returns>Async Task downloading image.</returns>
         protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc)
         {
-            await DownloadFile(att, sc, _filesPath + att.Filename);
+            await DownloadFile(att, sc, _moduleConfigFilePath + att.Filename);
         }
 
         protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc, string filepath)
@@ -186,9 +227,9 @@ namespace DiscordBot1
             {
                 string imgName = words[1];
 
-                if (!Directory.Exists(_filesPath))
+                if (!Directory.Exists(_moduleConfigFilePath))
                 {
-                    Directory.CreateDirectory(_filesPath);
+                    Directory.CreateDirectory(_moduleConfigFilePath);
                 }
                 foreach (var img in _moduleConfig.Root.Elements())
                 {
@@ -205,11 +246,11 @@ namespace DiscordBot1
                     {
                         if (RuleGenerator.IsImage(att))
                         {
-                            string filepath = _filesPath + att.Filename;
+                            string filepath = _moduleConfigFilePath + att.Filename;
 
                             if (File.Exists(filepath))
                             {
-                                filepath = _filesPath + Guid.NewGuid().ToString() + Path.GetExtension(att.Filename);
+                                filepath = _moduleConfigFilePath + Guid.NewGuid().ToString() + Path.GetExtension(att.Filename);
                             }
 
                             await DownloadFile(att, msg.Channel, filepath);
@@ -280,7 +321,7 @@ namespace DiscordBot1
             await Task.Run(
                 () =>
                 {
-                    var files = Directory.GetFiles(_filesPath);
+                    var files = Directory.GetFiles(_moduleConfigFilePath);
                     foreach (var file in files)
                     {
                         if (file.EndsWith(".jpeg") ||
