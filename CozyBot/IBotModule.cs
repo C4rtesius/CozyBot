@@ -12,7 +12,7 @@ namespace DiscordBot1
         string ModuleXmlName { get; }
         IEnumerable<IBotCommand> ActiveCommands { get; }
 
-        event ConfigChanged ConfigChanged;
+        event ConfigChanged GuildBotConfigChanged;
         void Reconfigure(XElement configEl);
     }
 }

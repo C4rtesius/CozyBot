@@ -1,42 +1,132 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Xml.Linq;
-using System.Threading.Tasks;
 using System.IO;
+using System.Xml.Linq;
 using System.Net.Http;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 using Discord;
 using Discord.WebSocket;
 
 namespace DiscordBot1
 {
+    /// <summary>
+    /// ContentModule specialization - works with images(/video?).
+    /// </summary>
     public class ImageModule : ContentModule
     {
-        private const int _messageLimit = 1995;
+        // Private Fields
 
+        /// <summary>
+        /// Used for Discord message limit check.
+        /// </summary>
+        private const int _msgLengthLimit = 1800;
+
+        /// <summary>
+        /// Filename of module config.
+        /// </summary>
+        private static string _configFileName = "ImageModuleConfig.xml";
+
+        /// <summary>
+        /// String module Identifier.
+        /// </summary>
         private static string _stringID = "ImageModule";
+
+        /// <summary>
+        /// Module name in Guild XML config.
+        /// </summary>
         private static string _moduleXmlName = "userimg";
-        private string _workingPath;
-        public override string StringID { get { return _stringID; } }
-        public override string ModuleXmlName { get { return _moduleXmlName; } }
 
-        public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
-            : base(configEl, adminIds, clientId)
+        /// <summary>
+        /// Module working folder.
+        /// </summary>
+        private static string _moduleFolder = @"userimg\";
+
+        /// <summary>
+        /// String for citation usage count in XML.
+        /// </summary>
+        private static string _usageCountAttributeName = "used";
+
+        /// <summary>
+        /// Regex used in Add command parsing.
+        /// </summary>
+        private string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)$";
+
+        /// <summary>
+        /// Module XML config path.
+        /// </summary>
+        protected string _moduleConfigFilePath = String.Empty;
+
+        /// <summary>
+        /// Forbidden keys (because they are valid commands).
+        /// </summary>
+        protected string[] _blacklistedKeys = new string[]
         {
-            _workingPath = workingPath ?? throw new ArgumentNullException("workingPath cannot be null!");
+            "add",
+            "list",
+            // verbose list not implemented yet
+            //"vlist",   
+            "help",
+            "cfg",
+            "del"
+        };
 
-            if (!Directory.Exists(_workingPath))
+        /// <summary>
+        /// Regex used in Add command parsing.
+        /// </summary>
+        protected override string AddCommandRegex
+        {
+            get
             {
-                Directory.CreateDirectory(_workingPath);
-            }
-            if (!Directory.Exists(_workingPath + @"userimg\"))
-            {
-                Directory.CreateDirectory(_workingPath + @"userimg\");
+                return _addCommandRegex;
             }
         }
 
-        public static Func<SocketMessage, Task> SendFileCommandGenerator(string filePath)
+        // Public Properties
+
+        /// <summary>
+        /// String module Identifier.
+        /// </summary>
+        public override string StringID { get { return _stringID; } }
+
+        /// <summary>
+        /// Module name in Guild XML config.
+        /// </summary>
+        public override string ModuleXmlName { get { return _moduleXmlName; } }
+
+        /// <summary>
+        /// Module XML config path.
+        /// </summary>
+        public override string ModuleConfigFilePath
+        {
+            get
+            {
+                if (_moduleConfigFilePath == String.Empty)
+                {
+                    _moduleConfigFilePath = _guildPath + _configFileName;
+                }
+                return _moduleConfigFilePath;
+            }
+        }
+
+        /// <summary>
+        /// ImageModule constructor.
+        /// </summary>
+        /// <param name="configEl">XML Element containing Guild modules config.</param>
+        /// <param name="adminIds">IDs of Guild admins.</param>
+        /// <param name="clientId">Bot ID.</param>
+        /// <param name="workingPath">Path to module working folder.</param>
+        public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
+            : base(configEl, adminIds, clientId, workingPath)
+        {
+            if (!Directory.Exists(_guildPath + _moduleFolder))
+            {
+                Directory.CreateDirectory(_guildPath + _moduleFolder);
+            }
+        }
+
+        protected override Func<SocketMessage, Task> UseCommandGenerator(string key)
         {
             return async (msg) =>
             {
@@ -46,58 +136,148 @@ namespace DiscordBot1
                 }
                 catch
                 {
-
+                    // TODO: add logging or specify concrete Exception (?)
                 }
-                await msg.Channel.SendFileAsync(filePath);
+
+                var imgList = GetItemsListByKey(key);
+                if (imgList.Count == 0)
+                {
+                    return;
+                }
+
+                XElement imgEl = imgList[_rnd.Next() % imgList.Count];
+                string imgFileName = imgEl.Value;
+
+                try
+                {
+                    await SendFileTask(msg, _guildPath + _moduleFolder + imgFileName);
+                }
+                catch
+                {
+                    // TODO : implement more concise exception handling (?)
+                    return;
+                }
+
+                if (imgEl.Attribute(_usageCountAttributeName) != null)
+                {
+                    if (Int32.TryParse(imgEl.Attribute(_usageCountAttributeName).Value, out int uses))
+                    {
+                        uses++;
+                        imgEl.Attribute(_usageCountAttributeName).Value = uses.ToString();
+                    }
+                    else
+                    {
+                        imgEl.Attribute(_usageCountAttributeName).Value = 1.ToString();
+                    }
+                }
+                else
+                {
+                    imgEl.Add(
+                        new XAttribute(
+                            _usageCountAttributeName, 1.ToString()
+                        )
+                    );
+                }
+
+                await ModuleConfigChanged();
+                Reconfigure(_configEl);
             };
+            // old code
+            //return SendFileCommandGenerator(key);
         }
 
+        /// <summary>
+        /// Send file command generator.
+        /// </summary>
+        /// <param name="msg">SocketMessage which triggered action.</param>
+        /// <param name="filePath">Path to file to send.</param>
+        /// <returns>Async Task sending specified file to SocketMessage channel.</returns>
+        public async Task SendFileTask(SocketMessage msg, string filePath)
+        {
+            try
+            {
+                await msg.Channel.SendFileAsync(filePath);
+            }
+            catch
+            {
+                // TODO : Implement logging / specific catching.
+            }
+        }
+
+        /// <summary>
+        /// Generates addition commands and adds them to module commands list.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Add commands.</param>
         protected override void GenerateAddCommands(List<ulong> perms)
         {
             base.GenerateAddCommands(perms);
 
-            List<ulong> allPerms = new List<ulong>(_adminIds);
-            allPerms.AddRange(perms);
-            Rule addRule = RuleGenerator.HasRoleByIds(allPerms) & 
-                (
-                    RuleGenerator.TextIdentity(_prefix) &
-                    RuleGenerator.HasImage
-                );
+            // adding images without keys is deprecated
 
-            IBotCommand addCmd =
-                new BotCommand(
-                    StringID + "-add2cmd",
-                    addRule,
-                    DownloadImagesCommand
-                );
+            //List<ulong> allPerms = new List<ulong>(_adminIds);
+            //allPerms.AddRange(perms);
+            //Rule addRule = RuleGenerator.HasRoleByIds(allPerms) & 
+            //    (
+            //        RuleGenerator.TextIdentity(_prefix) &
+            //        RuleGenerator.HasImage
+            //    );
 
-            _addCommands.Add(addCmd);
+            //IBotCommand addCmd =
+            //    new BotCommand(
+            //        StringID + "-add2cmd",
+            //        addRule,
+            //        DownloadImagesCommand
+            //    );
+
+            //_addCommands.Add(addCmd);
         }
 
-        protected async Task DownloadImagesCommand(SocketMessage msg)
-        {
-            foreach (var att in msg.Attachments)
-            {
-                if (RuleGenerator.IsImage(att))
-                {
-                    await DownloadFile(att, msg.Channel);
-                }
-            }
+        /// <summary>
+        /// Downloads Images from input SocketMessage.
+        /// </summary>
+        /// <param name="msg">SocketMessage containing image.</param>
+        /// <returns>Async Task performing job.</returns>
+        //protected async Task DownloadImagesCommand(SocketMessage msg)
+        //{
+        //    foreach (var att in msg.Attachments)
+        //    {
+        //        if (RuleGenerator.IsImage(att))
+        //        {
+        //            try
+        //            {
+        //                await DownloadFile(att, msg.Channel);
+        //            }
+        //            catch
+        //            {
+        //                // TODO : Implement logging/exception handling
+        //            }
+                    
+        //            // More than one image is unsupported
 
-            try
-            {
-                await msg.DeleteAsync();
-            }
-            catch
-            {
+        //            break;
+        //        }
+        //    }
 
-            }
-        }
+        //    try
+        //    {
+        //        await msg.DeleteAsync();
+        //    }
+        //    catch
+        //    {
 
-        protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc)
-        {
-            await DownloadFile(att, sc, _workingPath + @"userimg\" + att.Filename);
-        }
+        //    }
+        //}
+
+        /// <summary>
+        /// Downloads Image from Attachment.
+        /// </summary>
+        /// <param name="att">Attachment containing image.</param>
+        /// <param name="sc">ISocketMessageChannel ...</param>
+        /// <returns>Async Task downloading image.</returns>
+        //protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc)
+        //{
+        //    await DownloadFile(att, sc, _guildPath + _moduleFolder + att.Filename);
+        //}
 
         protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc, string filepath)
         {
@@ -121,54 +301,95 @@ namespace DiscordBot1
 
         protected override async Task AddCommand(SocketMessage msg)
         {
-            var words = msg.Content.Split(" ");
-            bool ok = true;
-            if (words.Length > 1)
+            if (!Regex.IsMatch(msg.Content, AddCommandRegex))
             {
-                string imgName = words[1];
+                return;
+            }
 
-                if (!Directory.Exists(_workingPath + @"userimg\"))
+            var regexMatch = Regex.Match(msg.Content, AddCommandRegex);
+
+            string[] keys = regexMatch.Groups["key"].Value.Split('.');
+
+            // check for blacklisted keys
+            foreach (var blKey in _blacklistedKeys)
+            {
+                if (String.Compare(keys[0], blKey) == 0)
                 {
-                    Directory.CreateDirectory(_workingPath + @"userimg\");
+                    return;
                 }
-                foreach (var img in _moduleConfigEl.Elements())
+            }
+
+            XElement newItem = new XElement("item");
+
+            try
+            {
+                foreach (var att in msg.Attachments)
                 {
-                    if (img.Name == words[1])
+                    if (RuleGenerator.IsImage(att))
                     {
-                        await msg.Channel.SendMessageAsync("Пікча з таким кодом вже є " + EmojiCodes.Tomas);
-                        ok = false;
+                        Guid newItemGuid = Guid.NewGuid();
+
+                        string newItemFileName = newItemGuid.ToString() + Path.GetExtension(att.Filename);
+
+                        newItem =
+                            new XElement(
+                                "item",
+                                new XAttribute("name", newItemGuid.ToString()),
+                                newItemFileName
+                            );
+
+                        string filepath = _guildPath + _moduleFolder + newItemFileName;
+
+                        await DownloadFile(att, msg.Channel, filepath);
                         break;
                     }
                 }
-                if (ok)
+            }
+            catch //(Exception ex)
+            {
+                return;
+            }
+
+            XElement currentEl = _moduleConfig.Root;
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                XElement newEl = null;
+                foreach (var el in currentEl.Elements("key"))
                 {
-                    foreach (var att in msg.Attachments)
+                    if (el.Attribute("name") != null)
                     {
-                        if (RuleGenerator.IsImage(att))
+                        if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
                         {
-                            string filepath = _workingPath + @"userimg\" + att.Filename;
-
-                            if (File.Exists(filepath))
-                            {
-                                filepath = _workingPath + @"userimg\" + Guid.NewGuid().ToString() + Path.GetExtension(att.Filename);
-                            }
-
-                            await DownloadFile(att, msg.Channel, filepath);
-                            _moduleConfigEl.Add(new XElement(imgName, filepath));
-
-                            await RaiseConfigChanged(_configEl);
-
-                            GenerateUseCommands(ExtractPermissions(_moduleConfigEl.Attribute("usePerm")));
-
+                            newEl = el;
                             break;
                         }
                     }
                 }
+                if (newEl == null)
+                {
+                    newEl =
+                        new XElement(
+                            "key",
+                            new XAttribute("name", keys[i])
+                        );
+                    currentEl.Add(newEl);
+                }
+                currentEl = newEl;
             }
-            else
+
+            currentEl.Add(newItem);
+
+            try
             {
-                await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.Tomas);
+                await ModuleConfigChanged();
             }
+            catch
+            {
+                // TODO : Implement
+            }
+
+            Reconfigure(_configEl);
 
             try
             {
@@ -176,7 +397,7 @@ namespace DiscordBot1
             }
             catch
             {
-
+                // TODO: add logging or specify concrete Exception (?)
             }
         }
 
@@ -184,104 +405,129 @@ namespace DiscordBot1
         {
             base.GenerateUseCommands(perms);
 
-            List<ulong> allPerms = new List<ulong>(_adminIds);
-            allPerms.AddRange(perms);
-            Rule useRuleRandom = RuleGenerator.HasRoleByIds(allPerms) & 
-                RuleGenerator.TextIdentity(_prefix) &
-                !RuleGenerator.HasImage;
+            // TODO: Implement verbose list cmd (?)
 
-            _useCommands.Add(
-                new BotCommand(
-                    StringID + "-random-usecmd",
-                    useRuleRandom,
-                    RandomImageCommand
-                )   
-            );
+            //List<ulong> allListPerms = new List<ulong>(_adminIds);
+            //allListPerms.AddRange(perms);
+            //Rule listRule = RuleGenerator.HasRoleByIds(allListPerms)
+            //    & RuleGenerator.PrefixatedCommand(_prefix, "vlist");
+
+            //_useCommands.Add(
+            //    new BotCommand(
+            //        StringID + "-listcmd",
+            //        listRule,
+            //        VerboseListCommand
+            //    )
+            //);
         }
 
-        protected override Func<SocketMessage, Task> UseCommandGenerator(string key)
-        {
-            return SendFileCommandGenerator(key);
-        }
+        // deprecated, implemented in UseCommand
 
-        protected async Task RandomImageCommand(SocketMessage msg)
+        //protected async Task RandomImageCommand(SocketMessage msg)
+        //{
+        //    try
+        //    {
+        //        await msg.DeleteAsync();
+        //    }
+        //    catch
+        //    {
+
+        //    }
+
+        //    string[] imagesArray = new string[] { };
+        //    var imagesList = new List<string>();
+
+        //    await Task.Run(
+        //        () =>
+        //        {
+        //            var files = Directory.GetFiles(_moduleConfigFilePath);
+        //            foreach (var file in files)
+        //            {
+        //                if (file.EndsWith(".jpeg") ||
+        //                    file.EndsWith(".jpg") ||
+        //                    file.EndsWith(".png") ||
+        //                    file.EndsWith(".bmp") ||
+        //                    file.EndsWith(".gif")
+        //                )
+        //                {
+        //                    imagesList.Add(file);
+        //                }
+        //            }
+
+        //            imagesArray = imagesList.ToArray();
+        //        }
+        //    );
+
+        //    int count = imagesArray.Length;
+        //    if (count == 0)
+        //    {
+        //        return;
+        //    }
+
+        //    string selectedFile = imagesArray[_rnd.Next() % count];
+
+        //    await SendImageByFilepath(msg, selectedFile);
+        //}
+
+        //protected async Task SendImageByFilepath(SocketMessage msg, string filePath)
+        //{
+        //    await msg.Channel.SendFileAsync(filePath);
+        //}
+
+        protected override async Task ListCommand(SocketMessage msg)
         {
+            // TODO : fix a bug with wrong `list` command output
             try
             {
                 await msg.DeleteAsync();
             }
             catch
             {
-
+                // TODO : add proper exception handling
             }
 
-            string[] imagesArray = new string[] { };
-            var imagesList = new List<string>();
+            // TODO : fix `c!list key` when key contains only 1 item
 
-            await Task.Run(
-                () =>
-                {
-                    var files = Directory.GetFiles(_workingPath + @"userimg\");
-                    foreach (var file in files)
-                    {
-                        if (file.EndsWith(".jpeg") ||
-                            file.EndsWith(".jpg") ||
-                            file.EndsWith(".png") ||
-                            file.EndsWith(".bmp") ||
-                            file.EndsWith(".gif")
-                        )
-                        {
-                            imagesList.Add(file);
-                        }
-                    }
 
-                    imagesArray = imagesList.ToArray();
-                }
-            );
-
-            int count = imagesArray.Length;
-            if (count == 0)
+            if (!Regex.IsMatch(msg.Content, ListCommandRegex))
             {
                 return;
             }
+            var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
 
-            string selectedFile = imagesArray[_rnd.Next() % count];
 
-            await SendImageByFilepath(msg, selectedFile);
-        }
-
-        protected async Task SendImageByFilepath(SocketMessage msg, string filePath)
-        {
-            await msg.Channel.SendFileAsync(filePath);
-        }
-
-        protected override async Task ListCommand(SocketMessage msg)
-        {
-            try
-            {
-                await msg.DeleteAsync();
-            }
-            catch { }
+            string keyStr = regexMatch.Groups["key"].Value;
+            var listRoot = GetRootByKey(keyStr);
 
             List<string> outputMsgs = new List<string>();
 
-            string output = @"**Список доступних зображень :**" + Environment.NewLine + @"```";
+            string output = @"**Список доступних пікч"
+                + ((String.IsNullOrWhiteSpace(keyStr) ? "" : @" по підключу `" + keyStr + @"`"))
+                + @" :**" + Environment.NewLine + @"```";
 
-            string name = String.Empty;
-
-            foreach (var citeEl in _moduleConfigEl.Elements())
+            var list =
+                RPKeyListGenerator
+                (
+                    listRoot,
+                    String.IsNullOrWhiteSpace(keyStr) ? "" : keyStr + ".",
+                    false
+                );
+            if (list.Count == 0)
             {
-                name = citeEl.Name.ToString();
-
-                if (output.Length + name.Length < _messageLimit)
+                return;
+            }
+            list.Add(keyStr);
+            foreach (var key in list)
+            {
+                if (output.Length + key.Length < _msgLengthLimit)
                 {
-                    output += Environment.NewLine + citeEl.Name.ToString();
+                    output += Environment.NewLine + key;
                 }
                 else
                 {
                     output += @"```";
                     outputMsgs.Add(output);
-                    output = @"```" + name;
+                    output = @"```" + key;
                 }
             }
 
@@ -297,7 +543,50 @@ namespace DiscordBot1
 
             output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
 
-            await msg.Channel.SendMessageAsync(output);
+            try
+            {
+                await msg.Channel.SendMessageAsync(output);
+            }
+            catch
+            {
+                //
+            }
+            // old code
+            //List<string> outputMsgs = new List<string>();
+
+            //string output = @"**Список доступних зображень :**" + Environment.NewLine + @"```";
+
+            //string name = String.Empty;
+
+            //foreach (var citeEl in _moduleConfig.Root.Elements())
+            //{
+            //    name = citeEl.Name.ToString();
+
+            //    if (output.Length + name.Length < _msgLengthLimit)
+            //    {
+            //        output += Environment.NewLine + citeEl.Name.ToString();
+            //    }
+            //    else
+            //    {
+            //        output += @"```";
+            //        outputMsgs.Add(output);
+            //        output = @"```" + name;
+            //    }
+            //}
+
+            //output += @"```";
+            //outputMsgs.Add(output);
+
+            //var ch = await msg.Author.GetOrCreateDMChannelAsync();
+
+            //foreach (var outputMsg in outputMsgs)
+            //{
+            //    await ch.SendMessageAsync(outputMsg);
+            //}
+
+            //output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
+
+            //await msg.Channel.SendMessageAsync(output);
         }
 
         protected override async Task HelpCommand(SocketMessage msg)
@@ -366,46 +655,50 @@ namespace DiscordBot1
 
         protected override async Task DeleteCommand(SocketMessage msg)
         {
-            string msgContent = msg.Content;
-            string[] words = msgContent.Split(" ");
-
-            if (words.Length < 2)
+            if (!Regex.IsMatch(msg.Content, ListCommandRegex))
             {
-                await msg.Channel.SendMessageAsync(@"Видалити що ? " + EmojiCodes.WaitWhat);
+                return;
+            }
+            var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+
+            string key = regexMatch.Groups["key"].Value;
+            if (String.IsNullOrWhiteSpace(key))
+            {
                 return;
             }
 
-            List<string> imagesToDelete = new List<string>();
-            Dictionary<string, string> imagesDeleted = new Dictionary<string, string>();
+            var listRoot = GetRootByKey(key);
+            var delDict = new Dictionary<string, XElement>();
 
-            for (int i = 1; i < words.Length; i++)
-            {
-                imagesToDelete.Add(words[i]);
-            }
+            RPItemDictGenerator(listRoot, key + ".", delDict);
 
-            foreach (var citation in imagesToDelete)
+            List<string> imgDeleted = new List<string>();
+
+            foreach (var delKVP in delDict)
             {
-                foreach (var citationEl in _moduleConfigEl.Elements())
+                DeleteItemRecursively(delKVP.Value);
+                imgDeleted.Add(delKVP.Key);
+                try
                 {
-                    if (citation == citationEl.Name.ToString())
-                    {
-                        citationEl.Remove();
-                        imagesDeleted.Add(citation, citationEl.Value);
-                        await Task.Run( () => File.Delete(citationEl.Value));
-                        break;
-                    }
+                    await Task.Run(() => File.Delete(
+                        _guildPath + _moduleFolder + delKVP.Value.Value));
+                }
+                catch
+                {
+                    //
                 }
             }
 
-            if (imagesDeleted.Count > 0)
+            if (imgDeleted.Count > 0)
             {
-                await RaiseConfigChanged(_configEl);
-
-                GenerateUseCommands(ExtractPermissions(_moduleConfigEl.Attribute("usePerm")));
-                string output = @"Видалив наступні зображення :" + Environment.NewLine + @"```";
-                foreach (var deleted in imagesDeleted)
+                //await RaiseConfigChanged(_configEl);
+                await ModuleConfigChanged();
+                Reconfigure(_configEl);
+                //GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
+                string output = @"Видалив наступні пікчі :" + Environment.NewLine + @"```";
+                foreach (var deleted in imgDeleted)
                 {
-                    output += deleted.Key + " ";
+                    output += deleted + Environment.NewLine;
                 }
                 output += "```" + Environment.NewLine + EmojiCodes.Pepe;
 
@@ -414,6 +707,80 @@ namespace DiscordBot1
             else
             {
                 await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat);
+            }
+
+            // old code
+            //string msgContent = msg.Content;
+            //string[] words = msgContent.Split(" ");
+
+            //if (words.Length < 2)
+            //{
+            //    await msg.Channel.SendMessageAsync(@"Видалити що ? " + EmojiCodes.WaitWhat);
+            //    return;
+            //}
+
+            //List<string> imagesToDelete = new List<string>();
+            //Dictionary<string, string> imagesDeleted = new Dictionary<string, string>();
+
+            //for (int i = 1; i < words.Length; i++)
+            //{
+            //    imagesToDelete.Add(words[i]);
+            //}
+
+            //foreach (var citation in imagesToDelete)
+            //{
+            //    foreach (var citationEl in _moduleConfig.Root.Elements())
+            //    {
+            //        if (citation == citationEl.Name.ToString())
+            //        {
+            //            citationEl.Remove();
+            //            imagesDeleted.Add(citation, citationEl.Value);
+            //            await Task.Run( () => File.Delete(citationEl.Value));
+            //            break;
+            //        }
+            //    }
+            //}
+
+            //if (imagesDeleted.Count > 0)
+            //{
+            //    await RaiseConfigChanged(_configEl);
+
+            //    GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
+            //    string output = @"Видалив наступні зображення :" + Environment.NewLine + @"```";
+            //    foreach (var deleted in imagesDeleted)
+            //    {
+            //        output += deleted.Key + " ";
+            //    }
+            //    output += "```" + Environment.NewLine + EmojiCodes.Pepe;
+
+            //    await msg.Channel.SendMessageAsync(output);
+            //}
+            //else
+            //{
+            //    await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat);
+            //}
+        }
+
+        /// <summary>
+        /// Creates default module config XML file and writes file to disk.
+        /// </summary>
+        /// <param name="filePath">Config filepath.</param>
+        protected override void CreateDefaultModuleConfig(string filePath)
+        {
+            try
+            {
+                new XDocument(
+                    new XElement(ModuleXmlName,
+                        new XAttribute("cfgPerm", ""),
+                        new XAttribute("addPerm", ""),
+                        new XAttribute("usePerm", ""),
+                        new XAttribute("delPerm", "")
+                    )
+                ).Save(filePath);
+            }
+            catch
+            {
+                // TODO : Handle Exception
             }
         }
     }

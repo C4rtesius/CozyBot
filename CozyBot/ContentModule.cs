@@ -1,36 +1,121 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Xml;
 using System.Text;
 using System.Xml.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 using Discord.WebSocket;
 
 namespace DiscordBot1
 {
+    /// <summary>
+    /// Abstract Class describes user content, which can be saved and posted by bot.
+    /// </summary>
     public abstract class ContentModule : IBotModule
     {
+        /// <summary>
+        /// Regex used in List commands parsing;
+        /// </summary>
+        private static string _listCommandRegex = @"^(?<pref>\S+)\s*(?<key>\S+)?$";
+
+        /// <summary>
+        /// Configuration commands list.
+        /// </summary>
         protected List<IBotCommand> _cfgCommands = new List<IBotCommand>();
+
+        /// <summary>
+        /// Content Use commands list.
+        /// </summary>
         protected List<IBotCommand> _useCommands = new List<IBotCommand>();
+
+        /// <summary>
+        /// Content Addition commands list.
+        /// </summary>
         protected List<IBotCommand> _addCommands = new List<IBotCommand>();
+
+        /// <summary>
+        /// Content deletion commands list.
+        /// </summary>
         protected List<IBotCommand> _delCommands = new List<IBotCommand>();
 
+        /// <summary>
+        /// Boolean flag indicating if module is active.
+        /// </summary>
         protected bool _isActive;
 
-        protected string _defaultPrefix = "c!";
+        /// <summary>
+        /// Module's commands default prefix.
+        /// </summary>
+        protected static string _defaultPrefix = "c!";
+
+        /// <summary>
+        /// Module's commands current prefix.
+        /// </summary>
         protected string _prefix;
 
+        /// <summary>
+        /// Bot's ID.
+        /// </summary>
         protected ulong _clientId;
+
+        /// <summary>
+        /// List of guild admins IDs.
+        /// </summary>
         protected List<ulong> _adminIds;
 
+        /// <summary>
+        /// XElement containing guild's modules config.
+        /// </summary>
         protected XElement _configEl;
-        protected XElement _moduleConfigEl;
 
+        /// <summary>
+        /// XElement containing this module config.
+        /// </summary>
+        protected XDocument _moduleConfig;
+
+        /// <summary>
+        /// Internal RNG.
+        /// </summary>
         protected static Random _rnd = new Random();
 
+        /// <summary>
+        /// Internal configuration change event.
+        /// </summary>
         protected event ConfigChanged _configChanged;
 
-        public event ConfigChanged ConfigChanged
+        /// <summary>
+        /// Lock object for module XML config file.
+        /// </summary>
+        protected object _moduleConfigLock = new object();
+
+        /// <summary>
+        /// Guild working path.
+        /// </summary>
+        protected string _guildPath;
+
+        /// <summary>
+        /// Regex used in Add command parsing.
+        /// </summary>
+        protected abstract string AddCommandRegex { get; }
+
+        /// <summary>
+        /// Regex used in List commands parsing;
+        /// </summary>
+        protected virtual string ListCommandRegex
+        {
+            get
+            {
+                return _listCommandRegex;
+            }
+        }
+
+        /// <summary>
+        /// Configuration Changed Event. Raised on changes to config.
+        /// </summary>
+        public event ConfigChanged GuildBotConfigChanged
         {
             add
             {
@@ -56,10 +141,24 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// Module string identifier.
+        /// </summary>
         public abstract string StringID { get; }
 
+        /// <summary>
+        /// Module XML config path.
+        /// </summary>
+        public abstract string ModuleConfigFilePath { get; }
+
+        /// <summary>
+        /// Module name in Guild config.
+        /// </summary>
         public abstract string ModuleXmlName { get; }
 
+        /// <summary>
+        /// List containing active commands.
+        /// </summary>
         public virtual IEnumerable<IBotCommand> ActiveCommands
         {
             get
@@ -83,7 +182,19 @@ namespace DiscordBot1
             }
         }
 
-        public ContentModule(XElement configEl, List<ulong> adminIds, ulong clientId)
+        /// <summary>
+        /// ContentModule constructor.
+        /// </summary>
+        /// <param name="configEl">XElement containing guild's modules config.</param>
+        /// <param name="adminIds">List of Guild Admins.</param>
+        /// <param name="clientId">ID of Bot.</param>
+        /// <param name="guildPath">Guild path.</param>
+        public ContentModule(
+            XElement configEl, 
+            List<ulong> adminIds, 
+            ulong clientId,
+            string guildPath
+            )
         {
             _configEl = configEl ?? throw new ArgumentNullException("Configuration Element cannot be null.");
 
@@ -91,24 +202,33 @@ namespace DiscordBot1
 
             _clientId = clientId;
 
-            if (_configEl.Element(ModuleXmlName) != null)
-            {
-                _moduleConfigEl = _configEl.Element(ModuleXmlName);
-            }
-            else
+            if (_configEl.Element(ModuleXmlName) == null)
             {
                 XElement moduleConfigEl =
                     new XElement(ModuleXmlName,
                         new XAttribute("on", Boolean.FalseString),
-                        new XAttribute("prefix", _defaultPrefix));
-                _moduleConfigEl = moduleConfigEl;
+                        new XAttribute("prefix", _defaultPrefix),
+                        ModuleConfigFilePath
+                    );
+                //_moduleConfigEl = moduleConfigEl;
 
                 _configEl.Add(moduleConfigEl);
+            }
+
+            _guildPath = guildPath ?? throw new ArgumentNullException("guildPath cannot be null!");
+
+            if (!Directory.Exists(_guildPath))
+            {
+                Directory.CreateDirectory(_guildPath);
             }
 
             Configure(_configEl);
         }
 
+        /// <summary>
+        /// Module reconfiguration method.
+        /// </summary>
+        /// <param name="configEl">XElement containing guild's modules config.</param>
         public void Reconfigure(XElement configEl)
         {
             if (configEl == null)
@@ -119,6 +239,11 @@ namespace DiscordBot1
             Configure(configEl);
         }
 
+        /// <summary>
+        /// Extracts list of IDs from XAttribute.
+        /// </summary>
+        /// <param name="attr">XAttribute to extract IDs from.</param>
+        /// <returns>List of IDs from specified XAttribute.</returns>
         protected List<ulong> ExtractPermissions(XAttribute attr)
         {
             List<ulong> ids = new List<ulong>();
@@ -142,15 +267,19 @@ namespace DiscordBot1
             return ids;
         }
 
+        /// <summary>
+        /// Module configuration method.
+        /// </summary>
+        /// <param name="configEl">XElement containing guild's modules config.</param>
         protected virtual void Configure(XElement configEl)
         {
-            XElement moduleCfgEl = configEl.Element(ModuleXmlName);
+            XElement guildBotModuleCfg = configEl.Element(ModuleXmlName);
 
             bool isActive = false;
 
-            if (moduleCfgEl.Attribute("on") != null)
+            if (guildBotModuleCfg.Attribute("on") != null)
             {
-                if (!Boolean.TryParse(moduleCfgEl.Attribute("on").Value, out isActive))
+                if (!Boolean.TryParse(guildBotModuleCfg.Attribute("on").Value, out isActive))
                 {
                     isActive = false;
                 }
@@ -160,15 +289,23 @@ namespace DiscordBot1
 
             string prefix = _defaultPrefix;
 
-            if (moduleCfgEl.Attribute("prefix") != null)
+            if (guildBotModuleCfg.Attribute("prefix") != null)
             {
-                if (!String.IsNullOrWhiteSpace(moduleCfgEl.Attribute("prefix").Value))
+                if (!String.IsNullOrWhiteSpace(guildBotModuleCfg.Attribute("prefix").Value))
                 {
-                    prefix = moduleCfgEl.Attribute("prefix").Value;
+                    prefix = guildBotModuleCfg.Attribute("prefix").Value;
                 }
             }
 
             _prefix = prefix;
+
+            if (!File.Exists(ModuleConfigFilePath))
+            {
+                CreateDefaultModuleConfig(ModuleConfigFilePath);
+            }
+
+            _moduleConfig = XDocument.Load(ModuleConfigFilePath);
+            XElement moduleCfgEl = _moduleConfig.Root;
 
             if (moduleCfgEl.Attribute("cfgPerm") == null)
             {
@@ -208,6 +345,16 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// Creates default module XML config file.
+        /// </summary>
+        /// <param name="filePath">Path to config file.</param>
+        protected abstract void CreateDefaultModuleConfig(string filePath);
+
+        /// <summary>
+        /// Generates module configuration commands from specified list of allowed role IDs.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Config commands.</param>
         protected virtual void GenerateCfgCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -225,6 +372,10 @@ namespace DiscordBot1
             _cfgCommands = new List<IBotCommand> { configCmd };
         }
 
+        /// <summary>
+        /// Generates content addition commands from specified list of allowed role IDs.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Add commands.</param>
         protected virtual void GenerateAddCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -242,6 +393,11 @@ namespace DiscordBot1
             _addCommands = new List<IBotCommand> { addCmd };
         }
 
+
+        /// <summary>
+        /// Generates content deletion commands from specified list of allowed role IDs.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Delete commands.</param>
         protected virtual void GenerateDelCommands(List<ulong> perms)
         {
             List<ulong> allPerms = new List<ulong>(_adminIds);
@@ -259,28 +415,70 @@ namespace DiscordBot1
             _delCommands = new List<IBotCommand> { delCmd };
         }
 
+        /// <summary>
+        /// Generates content usage commands from specified list of allowed role IDs.
+        /// </summary>
+        /// <param name="perms">List of Roles IDs which are allowed to use Use commands.</param>
         protected virtual void GenerateUseCommands(List<ulong> perms)
         {
             List<IBotCommand> useCommands = new List<IBotCommand>();
 
-            foreach (var _keyEl in _moduleConfigEl.Elements())
-            {
-                string key = _keyEl.Name.ToString();
+            var stringKeys = RPKeyListGenerator(_moduleConfig.Root, "", true);
 
-                List<ulong> allUsePerms = new List<ulong>(_adminIds);
-                allUsePerms.AddRange(perms);
-                Rule useRule = RuleGenerator.HasRoleByIds(allUsePerms)
-                    & RuleGenerator.PrefixatedCommand(_prefix, key)
+            List<ulong> allUsePerms = new List<ulong>(_adminIds);
+            allUsePerms.AddRange(perms);
+            Rule useRule;
+            foreach (var strKey in stringKeys)
+            {
+
+                useRule = RuleGenerator.HasRoleByIds(allUsePerms)
+                    & RuleGenerator.PrefixatedCommand(_prefix, strKey)
                     & (!RuleGenerator.UserByID(_clientId));
 
                 useCommands.Add(
                     new BotCommand(
-                        StringID + "-" + key + "-usecmd",
+                        StringID + "-" + strKey + "-usecmd",
                         useRule,
-                        UseCommandGenerator(_keyEl.Value)
+                        UseCommandGenerator(strKey)
                     )
                 );
             }
+            useRule = RuleGenerator.HasRoleByIds(allUsePerms) &
+                RuleGenerator.TextIdentity(_prefix) &
+                (!RuleGenerator.UserByID(_clientId));
+
+            // to support empty prefix commands e.g. c! or i!
+            useCommands.Add(
+                new BotCommand(
+                    StringID + "-usecmd",
+                        useRule,
+                        UseCommandGenerator(String.Empty)
+                    )
+            );
+
+            //foreach (var keyEl in keys)
+            //{
+            //    if (keyEl.Attribute("name") == null)
+            //    {
+            //        continue;
+            //    }
+
+            //    string key = keyEl.Attribute("name").ToString();
+
+            //    List<ulong> allUsePerms = new List<ulong>(_adminIds);
+            //    allUsePerms.AddRange(perms);
+            //    Rule useRule = RuleGenerator.HasRoleByIds(allUsePerms)
+            //        & RuleGenerator.PrefixatedCommand(_prefix, key)
+            //        & (!RuleGenerator.UserByID(_clientId));
+
+            //    useCommands.Add(
+            //        new BotCommand(
+            //            StringID + "-" + key + "-usecmd",
+            //            useRule,
+            //            UseCommandGenerator(key)
+            //        )
+            //    );
+            //}
 
             List<ulong> allHelpPerms = new List<ulong>(_adminIds);
             allHelpPerms.AddRange(perms);
@@ -311,6 +509,219 @@ namespace DiscordBot1
             _useCommands = useCommands;
         }
 
+        /// <summary>
+        /// Recursive Prefixated Key Generator.
+        /// </summary>
+        /// <param name="el">Element to search keys in.</param>
+        /// <param name="prev">Previous prefix.</param>
+        /// <returns>List of strings - valid prefixes for commands.</returns>
+        protected virtual List<string> RPKeyListGenerator(
+            XElement el, 
+            string prev,
+            bool includeItems
+        )
+        {
+            List<string> results = new List<string>();
+            if (includeItems)
+            {
+                results.AddRange(RPKLGenStubs(el, prev));
+            }
+
+            foreach (var key in el.Elements("key"))
+            {
+                if (key.Attribute("name") != null)
+                {
+                    string prefix = prev + key.Attribute("name").Value;
+                    results.Add(prefix);
+                    results.AddRange(RPKeyListGenerator(key, prefix + ".", includeItems));
+                }
+            }
+            return results;
+        }
+
+        /// <summary>
+        /// Recursive Prefixated Key Generator Item Stubs.
+        /// </summary>
+        /// <param name="el">Element to search for item stubs.</param>
+        /// <param name="prev">Previous prefix.</param>
+        /// <returns>List of strings - valid item references.</returns>
+        protected virtual List<string> RPKLGenStubs(XElement el, string prev)
+        {
+            List<string> results = new List<string>();
+
+            foreach (var item in el.Elements("item"))
+            {
+                var temp = item.Attribute("name");
+                if (temp != null)
+                {
+                    if (!String.IsNullOrWhiteSpace(temp.Value))
+                    {
+                        results.Add(prev + temp.Value);
+                    }
+                }
+            }
+
+            return results;
+        }
+
+        protected virtual void RPItemDictGenerator(
+            XElement el,
+            string prev,
+            Dictionary<string, XElement> dict
+        )
+        {
+            RPIDGenStub(el, prev, dict);
+
+            foreach(var key in el.Elements("key"))
+            {
+                if (key.Attribute("name") != null)
+                {
+                    string prefix = prev + key.Attribute("name").Value;
+                    RPItemDictGenerator(key, prefix + ".", dict);
+                }
+            }
+        }
+
+        protected virtual void RPIDGenStub(
+            XElement el,
+            string prev,
+            Dictionary<string, XElement> dict
+        )
+        {
+            foreach (var item in el.Elements("item"))
+            {
+                var temp = item.Attribute("name");
+                if (temp != null)
+                {
+                    if (!String.IsNullOrWhiteSpace(temp.Value))
+                    {
+                        dict.Add(prev + temp.Value, item);
+                    }
+                }
+            }
+        }
+
+        protected virtual XElement GetRootByKey(string key)
+        {
+            XElement currentKeyEl = _moduleConfig.Root;
+
+            if (key != String.Empty)
+            {
+                XElement subEl = null;
+
+                string[] keys = key.Split('.');
+
+                for (int i = 0; i < keys.Length; i++)
+                {
+                    subEl = null;
+
+                    foreach (var el in currentKeyEl.Elements("key"))
+                    {
+                        if (el.Attribute("name") != null)
+                        {
+                            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                            {
+                                subEl = el;
+                                break;
+                            }
+                        }
+                    }
+                    if (subEl == null)
+                    {
+                        foreach (var el in currentKeyEl.Elements("item"))
+                        {
+                            if (el.Attribute("name") != null)
+                            {
+                                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                                {
+                                    subEl = el;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (subEl == null)
+                    {
+                        return null;
+                    }
+                    currentKeyEl = subEl;
+                }
+            }
+            return currentKeyEl;
+        }
+
+        protected virtual List<XElement> GetItemsListByKey(string key)
+        {
+            var root = GetRootByKey(key);
+            return (root != null) ? GetItemsByRoot(root) : new List<XElement>();
+        }
+
+        /// <summary>
+        /// Method for items extraction from tree.
+        /// </summary>
+        /// <param name="root">Root element from which to extract all items.</param>
+        /// <returns>List of all items in tree.</returns>
+        private List<XElement> GetItemsByRoot(XElement root)
+        {
+            List<XElement> result = new List<XElement>();
+            if (root.Name == "item")
+            {
+                result.Add(root);
+            }
+            foreach (var el in root.Elements("item"))
+            {
+                result.Add(el);
+            }
+            foreach (var key in root.Elements("key"))
+            {
+                result.AddRange(GetItemsByRoot(key));
+            }
+            return result;
+        }
+
+        protected virtual void DeleteItemRecursively(XElement el)
+        {
+            // TODO : rewrite ?
+
+            XElement parentEl = el.Parent;
+            foreach (var element in parentEl.Elements("item"))
+            {
+                if (element.Attribute("name") != el.Attribute("name"))
+                {
+                    el.Remove();
+                    return;
+                }
+            }
+            foreach (var element in parentEl.Elements("key"))
+            {
+                if (element.Attribute("name") != el.Attribute("name"))
+                {
+                    el.Remove();
+                    return;
+                }
+            }
+            if (parentEl.Name == ModuleXmlName)
+            {
+                el.Remove();
+            }
+            else
+            {
+                DeleteItemRecursively(parentEl);
+                el.Remove();
+            }
+            //if (   (parentEl.Element("item") == null) 
+            //    && (parentEl.Element("key ") == null)
+            //    && (parentEl.Name != _moduleXmlName))
+            //{
+            //    DeleteItemRecursively(parentEl);
+            //}
+        }
+
+        /// <summary>
+        /// Module configuration command.
+        /// </summary>
+        /// <param name="msg">SocketMessage containing command.</param>
+        /// <returns>Async Task performing configuration.</returns>
         protected virtual async Task ConfigCommand(SocketMessage msg)
         {
             string content = msg.Content;
@@ -328,6 +739,12 @@ namespace DiscordBot1
             }
         }
 
+        /// <summary>
+        /// Permission control command. Changes commands usage permissions on per-role basis.
+        /// </summary>
+        /// <param name="category">Command to change access to. Valid values - cfg, add, use, del.</param>
+        /// <param name="msg">SocketMessage containing command.</param>
+        /// <returns>Async Task perfrorming permissions change.</returns>
         protected virtual async Task PermissionControlCommand(string category, SocketMessage msg)
         {
             var roles = msg.MentionedRoles;
@@ -341,19 +758,19 @@ namespace DiscordBot1
             switch (category)
             {
                 case "cfg":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("cfgPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("cfgPerm"), rolesIds);
                     GenerateCfgCommands(rolesIds);
                     break;
                 case "add":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("addPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("addPerm"), rolesIds);
                     GenerateAddCommands(rolesIds);
                     break;
                 case "use":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("usePerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("usePerm"), rolesIds);
                     GenerateUseCommands(rolesIds);
                     break;
                 case "del":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("delPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("delPerm"), rolesIds);
                     GenerateDelCommands(rolesIds);
                     break;
                 default:
@@ -363,6 +780,12 @@ namespace DiscordBot1
             await msg.Channel.SendMessageAsync("Дозволи було змінено " + EmojiCodes.Picardia);
         }
 
+        /// <summary>
+        /// Modifies access to specified command, allowing specified role IDs usage of command.
+        /// </summary>
+        /// <param name="attr">XAttribute specifing permission.</param>
+        /// <param name="ids">List of Role IDs allowed to use command.</param>
+        /// <returns>Async Task performing permissions change.</returns>
         protected virtual async Task ModifyPermissions(XAttribute attr, List<ulong> ids)
         {
             string newValue = String.Empty;
@@ -374,9 +797,34 @@ namespace DiscordBot1
 
             attr.Value = newValue;
 
-            await RaiseConfigChanged(_configEl);
+            await ModuleConfigChanged();
         }
 
+        /// <summary>
+        /// Saves Module XML Config File.
+        /// </summary>
+        /// <returns></returns>
+        protected virtual async Task ModuleConfigChanged()
+        {
+            await Task.Run(
+                    () =>
+                    {
+                        lock(_moduleConfigLock)
+                        {
+                            _moduleConfig.Save(ModuleConfigFilePath);
+                        }
+                    }
+                );
+
+            //await RaiseConfigChanged(configEl);
+        }
+
+
+        /// <summary>
+        /// GuildBot Config Changed Event wrapper.
+        /// </summary>
+        /// <param name="configEl">New configuration.</param>
+        /// <returns>Async task performing config change.</returns>
         protected async Task RaiseConfigChanged(XElement configEl)
         {
             await Task.Run(
@@ -387,14 +835,39 @@ namespace DiscordBot1
             );
         }
 
+        /// <summary>
+        /// Abstract method for content Addition command.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing content Addition.</returns>
         protected abstract Task AddCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for content Addition command.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing content Deletion.</returns>
         protected abstract Task DeleteCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for Help command.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing Help function.</returns>
         protected abstract Task HelpCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for providing List of user uploaded content.
+        /// </summary>
+        /// <param name="msg">Message containing command invocation.</param>
+        /// <returns>Async Task performing List function.</returns>
         protected abstract Task ListCommand(SocketMessage msg);
 
+        /// <summary>
+        /// Abstract method for content Usage command generator.
+        /// </summary>
+        /// <param name="key">Key by which content should be accessed.</param>
+        /// <returns>Function which provides content accessed by specified key.</returns>
         protected abstract Func<SocketMessage, Task> UseCommandGenerator(string key);
 
     }

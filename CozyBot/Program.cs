@@ -47,7 +47,6 @@ namespace DiscordBot1
                 _guildBotsDict = new Dictionary<ulong, GuildBot>();
 
                 _client = new DiscordSocketClient();
-
                 _client.Log += Log;
                 _client.MessageReceived += MessageReceived;
 
@@ -132,7 +131,8 @@ namespace DiscordBot1
                             new XAttribute("prefix", "i!")
                         ),
                         new XElement("archive",
-                            new XAttribute("on", Boolean.TrueString)
+                            new XAttribute("on", Boolean.TrueString),
+                            new XAttribute("prefix", "x!")
                         )
 
                     )
@@ -149,9 +149,17 @@ namespace DiscordBot1
             await Task.Run(
                 () =>
                 {
-                    using (var stream = File.Open(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    if (File.Exists(_configPath))
                     {
-                        _config = XDocument.Load(stream);
+                        using (var stream = File.Open(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        {
+                            _config = XDocument.Load(stream);
+                        }
+                    }
+                    else
+                    {
+                        // TODO : Add default config creation.
+                        throw new ApplicationException("Configuration file not found!");
                     }
                 }
             );

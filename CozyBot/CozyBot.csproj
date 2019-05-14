@@ -27,6 +27,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="ILoggableModule.cs" />
+    <Compile Remove="LoggingModule.cs" />
+    <Compile Remove="ModerationModule.cs" />
+    <Compile Remove="TimedPostModule.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="config - Copy.xml" />
     <None Remove="DiscordBot1.zip" />
     <None Remove="publish.bat" />

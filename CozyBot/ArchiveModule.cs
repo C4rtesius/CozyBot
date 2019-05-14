@@ -46,7 +46,7 @@ namespace DiscordBot1
 
         protected event ConfigChanged _configChanged;
 
-        public event ConfigChanged ConfigChanged
+        public event ConfigChanged GuildBotConfigChanged
         {
             add
             {
