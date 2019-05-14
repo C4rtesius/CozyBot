@@ -17,6 +17,11 @@ namespace DiscordBot1
     public abstract class ContentModule : IBotModule
     {
         /// <summary>
+        /// Regex used in List commands parsing;
+        /// </summary>
+        private static string _listCommandRegex = @"^(?<pref>\S+)\s*(?<key>\S+)?$";
+
+        /// <summary>
         /// Configuration commands list.
         /// </summary>
         protected List<IBotCommand> _cfgCommands = new List<IBotCommand>();
@@ -90,6 +95,22 @@ namespace DiscordBot1
         /// Guild working path.
         /// </summary>
         protected string _guildPath;
+
+        /// <summary>
+        /// Regex used in Add command parsing.
+        /// </summary>
+        protected abstract string AddCommandRegex { get; }
+
+        /// <summary>
+        /// Regex used in List commands parsing;
+        /// </summary>
+        protected virtual string ListCommandRegex
+        {
+            get
+            {
+                return _listCommandRegex;
+            }
+        }
 
         /// <summary>
         /// Configuration Changed Event. Raised on changes to config.
@@ -580,6 +601,121 @@ namespace DiscordBot1
             }
         }
 
+        protected virtual XElement GetRootByKey(string key)
+        {
+            XElement currentKeyEl = _moduleConfig.Root;
+
+            if (key != String.Empty)
+            {
+                XElement subEl = null;
+
+                string[] keys = key.Split('.');
+
+                for (int i = 0; i < keys.Length; i++)
+                {
+                    subEl = null;
+
+                    foreach (var el in currentKeyEl.Elements("key"))
+                    {
+                        if (el.Attribute("name") != null)
+                        {
+                            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                            {
+                                subEl = el;
+                                break;
+                            }
+                        }
+                    }
+                    if (subEl == null)
+                    {
+                        foreach (var el in currentKeyEl.Elements("item"))
+                        {
+                            if (el.Attribute("name") != null)
+                            {
+                                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
+                                {
+                                    subEl = el;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (subEl == null)
+                    {
+                        return null;
+                    }
+                    currentKeyEl = subEl;
+                }
+            }
+            return currentKeyEl;
+        }
+
+        protected virtual List<XElement> GetItemsListByKey(string key)
+        {
+            var root = GetRootByKey(key);
+            return (root != null) ? GetItemsByRoot(root) : new List<XElement>();
+        }
+
+        /// <summary>
+        /// Method for items extraction from tree.
+        /// </summary>
+        /// <param name="root">Root element from which to extract all items.</param>
+        /// <returns>List of all items in tree.</returns>
+        private List<XElement> GetItemsByRoot(XElement root)
+        {
+            List<XElement> result = new List<XElement>();
+            if (root.Name == "item")
+            {
+                result.Add(root);
+            }
+            foreach (var el in root.Elements("item"))
+            {
+                result.Add(el);
+            }
+            foreach (var key in root.Elements("key"))
+            {
+                result.AddRange(GetItemsByRoot(key));
+            }
+            return result;
+        }
+
+        protected virtual void DeleteItemRecursively(XElement el)
+        {
+            // TODO : rewrite ?
+
+            XElement parentEl = el.Parent;
+            foreach (var element in parentEl.Elements("item"))
+            {
+                if (element.Attribute("name") != el.Attribute("name"))
+                {
+                    el.Remove();
+                    return;
+                }
+            }
+            foreach (var element in parentEl.Elements("key"))
+            {
+                if (element.Attribute("name") != el.Attribute("name"))
+                {
+                    el.Remove();
+                    return;
+                }
+            }
+            if (parentEl.Name == ModuleXmlName)
+            {
+                el.Remove();
+            }
+            else
+            {
+                DeleteItemRecursively(parentEl);
+                el.Remove();
+            }
+            //if (   (parentEl.Element("item") == null) 
+            //    && (parentEl.Element("key ") == null)
+            //    && (parentEl.Name != _moduleXmlName))
+            //{
+            //    DeleteItemRecursively(parentEl);
+            //}
+        }
 
         /// <summary>
         /// Module configuration command.

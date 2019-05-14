@@ -49,19 +49,14 @@ namespace DiscordBot1
         private static string _usageCountAttributeName = "used";
 
         /// <summary>
-        /// Regex used in Add command parsing.
-        /// </summary>
-        private static string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)\s+(?<cite>[\s\S]+)$";
-
-        /// <summary>
-        /// Regex used in List commands parsing;
-        /// </summary>
-        private static string _listCommandRegex = @"^(?<pref>\S+)\s*(?<key>\S+)?$";
-
-        /// <summary>
         /// Module XML config path.
         /// </summary>
         protected string _moduleConfigFilePath = String.Empty;
+
+        /// <summary>
+        /// Regex used in Add command parsing.
+        /// </summary>
+        private string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)\s+(?<content>[\s\S]+)$";
 
         /// <summary>
         /// Forbidden keys (because they are valid commands).
@@ -75,6 +70,17 @@ namespace DiscordBot1
             "cfg",
             "del"
         };
+
+        /// <summary>
+        /// Regex used in Add command parsing.
+        /// </summary>
+        protected override string AddCommandRegex
+        {
+            get
+            {
+                return _addCommandRegex;
+            }
+        }
 
         // Public Properties
 
@@ -265,29 +271,6 @@ namespace DiscordBot1
         }
 
         /// <summary>
-        /// Method for items extraction from tree.
-        /// </summary>
-        /// <param name="root">Root element from which to extract all items.</param>
-        /// <returns>List of all items in tree.</returns>
-        private List<XElement> GetItemsByRoot(XElement root)
-        {
-            List<XElement> result = new List<XElement>();
-            if (root.Name == "item")
-            {
-                result.Add(root);
-            }
-            foreach(var el in root.Elements("item"))
-            {
-                result.Add(el);
-            }
-            foreach(var key in root.Elements("key"))
-            {
-                result.AddRange(GetItemsByRoot(key));
-            }
-            return result;
-        }
-
-        /// <summary>
         /// Method to send messages in human-like fashion. Just for lulz.
         /// </summary>
         /// <param name="msg">SocketMessage which triggered action.</param>
@@ -297,7 +280,13 @@ namespace DiscordBot1
         {
             await Task.Delay(1500 + (_rnd.Next() % 2000));
             await msg.Channel.TriggerTypingAsync();
-            await Task.Delay(3000 + (_rnd.Next() % 4000));
+
+            // Making delay dependent on citation length
+            // further testing needed
+            int delay = line.Length * 50;
+            await Task.Delay(500 + delay + (_rnd.Next() % 2000));
+
+            //await Task.Delay(3000 + (_rnd.Next() % 4000));
             await msg.Channel.SendMessageAsync(line);
         }
 
@@ -317,24 +306,12 @@ namespace DiscordBot1
                 // TODO: add logging or specify concrete Exception (?)
             }
 
-            if (!Regex.IsMatch(msg.Content, _addCommandRegex))
+            if (!Regex.IsMatch(msg.Content, AddCommandRegex))
             {
                 return;
             }
 
-            var regexMatch = Regex.Match(msg.Content, _addCommandRegex);
-
-            //var words = msg.Content.Split(" ");
-
-            //if (words.Length < 3)
-            //{
-            //    return;
-            //}
-
-            //string key = words[1];
-            //string citation = msg.Content.Remove(0, msg.Content.IndexOf(words[0]) + words[0].Length);
-            //citation = citation.Remove(0, citation.IndexOf(words[1]) + words[1].Length);
-            //citation = citation.Remove(0, citation.IndexOf(words[2]));
+            var regexMatch = Regex.Match(msg.Content, AddCommandRegex);
 
             string[] keys = regexMatch.Groups["key"].Value.Split('.');
             
@@ -360,7 +337,7 @@ namespace DiscordBot1
 
             try
             {
-                File.WriteAllText(_guildPath + _moduleFolder + newItemFileName, regexMatch.Groups["cite"].Value);
+                File.WriteAllText(_guildPath + _moduleFolder + newItemFileName, regexMatch.Groups["content"].Value);
             }
             catch //(Exception ex)
             {
@@ -409,56 +386,7 @@ namespace DiscordBot1
 
             Reconfigure(_configEl);
 
-            //string filepath = _guildPath + _moduleFolder + key + ".dat";
-            //bool existingAuthor = false;
-
-            //await Task.Run(
-            //    () =>
-            //    {
-            //        if (!Directory.Exists(_guildPath + _moduleFolder))
-            //        {
-            //            Directory.CreateDirectory(_guildPath + _moduleFolder);
-            //        }
-            //    }
-            //);
-
-            //foreach (var cite in _moduleConfig.Root.Elements("citation"))
-            //{
-            //    if (String.Compare(cite.Attribute("name").ToString(), key) == 0)
-            //    {
-            //        existingAuthor = true;
-
-            //        break;
-            //    }
-            //}
-
-            //await SaveCitationToFile(filepath, citation);
-
-            //if (!existingAuthor)
-            //{
-            //    _moduleConfig.Root.Add(
-            //        new XElement(
-            //            "citation", 
-            //            new XAttribute("name", key),
-            //            new XAttribute(_usageCountAttributeName, 0.ToString()),
-            //            citation
-            //        )
-            //    );
-
-                //await RaiseConfigChanged(_configEl);
-
-            //    GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
-            //}
-
             await msg.Channel.SendMessageAsync("Записав цитатку " + EmojiCodes.DankPepe);
-        }
-
-        private async Task SaveCitationToFile(string filepath, string cite)
-        {
-            using (StreamWriter file = new StreamWriter(filepath, true))
-            {
-                await file.WriteLineAsync(cite);
-            }
         }
 
         protected override void GenerateUseCommands(List<ulong> perms)
@@ -495,11 +423,11 @@ namespace DiscordBot1
 
             // TODO : fix `c!list key` when key contains only 1 item
 
-            if (!Regex.IsMatch(msg.Content, _listCommandRegex))
+            if (!Regex.IsMatch(msg.Content, ListCommandRegex))
             {
                 return;
             }
-            var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
+            var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
 
             string keyStr = regexMatch.Groups["key"].Value;
             var listRoot = GetRootByKey(keyStr);
@@ -569,12 +497,12 @@ namespace DiscordBot1
                 // TODO: add logging or specify concrete Exception (?)
             }
 
-            if (!Regex.IsMatch(msg.Content, _listCommandRegex))
+            if (!Regex.IsMatch(msg.Content, ListCommandRegex))
             {
                 return;
             }
 
-            var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
+            var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
             var cmdKey = regexMatch.Groups["key"].Value;
 
             var listRoot = GetRootByKey(cmdKey);
@@ -644,62 +572,6 @@ namespace DiscordBot1
             }
         }
 
-        protected virtual XElement GetRootByKey(string key)
-        {
-            XElement currentKeyEl = _moduleConfig.Root;
-
-            if (key != String.Empty)
-            {
-                XElement subEl = null;
-
-                string[] keys = key.Split('.');
-
-                for (int i = 0; i < keys.Length; i++)
-                {
-                    subEl = null;
-
-                    foreach (var el in currentKeyEl.Elements("key"))
-                    {
-                        if (el.Attribute("name") != null)
-                        {
-                            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
-                            {
-                                subEl = el;
-                                break;
-                            }
-                        }
-                    }
-                    if (subEl == null)
-                    {
-                        foreach (var el in currentKeyEl.Elements("item"))
-                        {
-                            if (el.Attribute("name") != null)
-                            {
-                                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
-                                {
-                                    subEl = el;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (subEl == null)
-                    {
-                        return null;
-                    }
-                    currentKeyEl = subEl;
-                }
-            }
-            return currentKeyEl;
-        }
-
-        protected virtual List<XElement> GetItemsListByKey(string key)
-        {
-            var root = GetRootByKey(key);
-            return (root != null) ? GetItemsByRoot(root) : new List<XElement>();
-        }
-
-
         protected override async Task HelpCommand(SocketMessage msg)
         {
             if (msg.Author is SocketGuildUser user)
@@ -764,11 +636,11 @@ namespace DiscordBot1
 
         protected override async Task DeleteCommand(SocketMessage msg)
         {
-            if (!Regex.IsMatch(msg.Content, _listCommandRegex))
+            if (!Regex.IsMatch(msg.Content, ListCommandRegex))
             {
                 return;
             }
-            var regexMatch = Regex.Match(msg.Content, _listCommandRegex);
+            var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
 
             string key = regexMatch.Groups["key"].Value;
             if (String.IsNullOrWhiteSpace(key))
@@ -846,44 +718,6 @@ namespace DiscordBot1
             }
         }
         
-        protected virtual void DeleteItemRecursively(XElement el)
-        {
-            // TODO : rewrite ?
-
-            XElement parentEl = el.Parent;
-            foreach (var element in parentEl.Elements("item"))
-            {
-                if (element.Attribute("name") != el.Attribute("name"))
-                {
-                    el.Remove();
-                    return;
-                }
-            }
-            foreach (var element in parentEl.Elements("key"))
-            {
-                if (element.Attribute("name") != el.Attribute("name"))
-                {
-                    el.Remove();
-                    return;
-                }
-            }
-            if (parentEl.Name == _moduleXmlName)
-            {
-                el.Remove();
-            }
-            else
-            {
-                DeleteItemRecursively(parentEl);
-                el.Remove();
-            }
-            //if (   (parentEl.Element("item") == null) 
-            //    && (parentEl.Element("key ") == null)
-            //    && (parentEl.Name != _moduleXmlName))
-            //{
-            //    DeleteItemRecursively(parentEl);
-            //}
-        }
-
         /// <summary>
         /// Creates default module config XML file and writes file to disk.
         /// </summary>
