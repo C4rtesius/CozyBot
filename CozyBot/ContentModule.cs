@@ -588,6 +588,14 @@ namespace DiscordBot1
             Dictionary<string, XElement> dict
         )
         {
+            // deletion hotfix
+            // TODO : rewrite or enhance
+
+            if  (el.Name == "item")
+            {
+                dict.Add(prev.TrimEnd('.'), el);
+                // return; ?
+            }
             foreach (var item in el.Elements("item"))
             {
                 var temp = item.Attribute("name");
