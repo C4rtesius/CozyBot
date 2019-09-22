@@ -12,7 +12,7 @@ namespace DiscordBot1
         public static string Thonk => @"<:thonk:540540493088423938>";
         public static string BobRoss => @"<:bobross:540540035729195025>";
         public static string DankPepe => @"<:dankpepe:540540295713128449>";
-        public static string Bumagi => @"<:bumagi:540540114888163338>";
+        public static string Bumagi => @"<:bumagi:580709087243796480>";
         public static string WaitWhat => @"<:waitwhat:540540454559547422>";
         public static string Tomas => @"<:tomas:540540188632416256>";
     }
