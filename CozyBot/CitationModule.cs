@@ -211,7 +211,10 @@ namespace CozyBot
             // added advanced delay mimicking continuonus typing
             int totalDelay = 500 + line.Length * 50 + (_rnd.Next() % 2000);
             for (; totalDelay > 5000; totalDelay -= 5000)
+            {
                 await Task.Delay(5000);
+                await msg.Channel.TriggerTypingAsync();
+            }
             await Task.Delay(totalDelay);
 
             //await Task.Delay(3000 + (_rnd.Next() % 4000));
