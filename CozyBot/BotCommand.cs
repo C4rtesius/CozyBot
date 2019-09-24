@@ -36,23 +36,11 @@ namespace CozyBot
 
         public BotCommand(string stringID, Rule executeRule, Func<SocketMessage, Task> cmd)
         {
-            if (string.IsNullOrEmpty(stringID))
-            {
-                throw new ArgumentException("BotCommand stringID cannot be null or empty.");
-            }
-            if (executeRule == null)
-            {
-                _executeRule = _alwaysCanExecute;
-            }
+            _stringID = Guard.NonNullWhitespaceEmpty(stringID, nameof(stringID));
 
-            if (cmd == null)
-            {
-                _cmd = _emptyExecution;
-            }
+            _executeRule = executeRule ?? _alwaysCanExecute;
+            _cmd = cmd ?? _emptyExecution;
 
-            _stringID = stringID;
-            _executeRule = executeRule;
-            _cmd = cmd;
             _id = Guid.NewGuid();
         }
 

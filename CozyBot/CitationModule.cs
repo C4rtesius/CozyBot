@@ -74,40 +74,27 @@ namespace CozyBot
         /// <summary>
         /// Regex used in Add command parsing.
         /// </summary>
-        protected override string AddCommandRegex
-        {
-            get
-            {
-                return _addCommandRegex;
-            }
-        }
+        protected override string AddCommandRegex => _addCommandRegex;
 
         // Public Properties
 
         /// <summary>
         /// String module identifier.
         /// </summary>
-        public override string StringID { get { return _stringID; } }
+        public override string StringID => _stringID;
 
         /// <summary>
         /// Module name in Guild XML config.
         /// </summary>
-        public override string ModuleXmlName { get { return _moduleXmlName; } }
+        public override string ModuleXmlName => _moduleXmlName;
 
         /// <summary>
         /// Module XML config path.
         /// </summary>
         public override string ModuleConfigFilePath
-        {
-            get
-            {
-                if (_moduleConfigFilePath == String.Empty)
-                {
-                    _moduleConfigFilePath = _guildPath + _configFileName;
-                }
-                return _moduleConfigFilePath;
-            }
-        }
+            => (_moduleConfigFilePath == String.Empty) 
+              ? _moduleConfigFilePath = _guildPath + _configFileName 
+              : _moduleConfigFilePath;
 
         /// <summary>
         /// Citation module constructor.
@@ -148,70 +135,7 @@ namespace CozyBot
                 {
                     return;
                 }
-                //XElement currentKeyEl = _moduleConfig.Root;
-                //XElement subEl = null;
-
-                //string[] keys = key.Split('.');
-
-                //for (int i = 0; i < keys.Length; i++)
-                //{
-                //    subEl = null;
-
-                //    foreach (var el in currentKeyEl.Elements("key"))
-                //    {
-                //        if (el.Attribute("name") != null)
-                //        {
-                //            if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
-                //            {
-                //                subEl = el;
-                //                break;
-                //            }
-                //        }
-                //    }
-                //    if (subEl == null)
-                //    {
-                //        foreach (var el in currentKeyEl.Elements("item"))
-                //        {
-                //            if (el.Attribute("name") != null)
-                //            {
-                //                if (String.Compare(el.Attribute("name").Value, keys[i]) == 0)
-                //                {
-                //                    subEl = el;
-                //                    break;
-                //                }
-                //            }
-                //        }
-                //    }
-                //    if (subEl == null)
-                //    {
-                //        return;
-                //    }
-                //    currentKeyEl = subEl;
-                //}
-
-                //var citationsList = GetItemsFromTree(currentKeyEl);
-
-                //foreach (var el in _moduleConfig.Root.Elements("key"))
-                //{
-                //    if (String.Compare(el.Attribute("name").ToString(), key) == 0)
-                //    {
-                //        keyEl = el;
-                //        break;
-                //    }
-                //}
-
-                //if (keyEl == null)
-                //{
-                //    return;
-                //}
-
-                //var citationEls = new List<XElement>(keyEl.Elements("citation"));
-
-                //if (citationEls.Count == 0)
-                //{
-                //    return;
-                //}
-
+                
                 XElement citationEl = citationsList[_rnd.Next() % citationsList.Count];
                 string citationFileName = citationEl.Value;
 
@@ -249,18 +173,18 @@ namespace CozyBot
                     if (Int32.TryParse(citationEl.Attribute(_usageCountAttributeName).Value, out int uses))
                     {
                         uses++;
-                        citationEl.Attribute(_usageCountAttributeName).Value = uses.ToString();
+                        citationEl.Attribute(_usageCountAttributeName).Value = $"{uses}";
                     }
                     else
                     {
-                        citationEl.Attribute(_usageCountAttributeName).Value = 1.ToString();
+                        citationEl.Attribute(_usageCountAttributeName).Value = $"{1}";
                     }
                 }
                 else
                 {
                     citationEl.Add(
                         new XAttribute(
-                            _usageCountAttributeName, 1.ToString()
+                            _usageCountAttributeName, $"{1}"
                         )
                     );
                 }
@@ -283,8 +207,12 @@ namespace CozyBot
 
             // Making delay dependent on citation length
             // further testing needed
-            int delay = line.Length * 50;
-            await Task.Delay(500 + delay + (_rnd.Next() % 2000));
+            // 25.09.2019 
+            // added advanced delay mimicking continuonus typing
+            int totalDelay = 500 + line.Length * 50 + (_rnd.Next() % 2000);
+            for (; totalDelay > 5000; totalDelay -= 5000)
+                await Task.Delay(5000);
+            await Task.Delay(totalDelay);
 
             //await Task.Delay(3000 + (_rnd.Next() % 4000));
             await msg.Channel.SendMessageAsync(line);
@@ -386,7 +314,7 @@ namespace CozyBot
 
             Reconfigure(_configEl);
 
-            await msg.Channel.SendMessageAsync("Записав цитатку " + EmojiCodes.DankPepe);
+            await msg.Channel.SendMessageAsync($"Записав цитатку {EmojiCodes.DankPepe}");
         }
 
         protected override void GenerateUseCommands(List<ulong> perms)
@@ -403,7 +331,7 @@ namespace CozyBot
 
             _useCommands.Add(
                 new BotCommand(
-                    StringID + "-listcmd",
+                    $"{StringID}-listcmd",
                     listRule,
                     VerboseListCommand
                 )
@@ -434,9 +362,13 @@ namespace CozyBot
 
             List<string> outputMsgs = new List<string>();
 
-            string output = @"**Список доступних цитат" 
-                + ((String.IsNullOrWhiteSpace(keyStr) ? "" : @" по підключу `" + keyStr + @"`")) 
-                + @" :**" + Environment.NewLine + @"```";
+            //string output = @"**Список доступних цитат" 
+            //    + ((String.IsNullOrWhiteSpace(keyStr) ? "" : @" по підключу `" + keyStr + @"`")) 
+            //    + @" :**" + Environment.NewLine + @"```";
+
+            string output =
+                $@"**Список доступних цитат" +
+                $@"{(String.IsNullOrWhiteSpace(keyStr) ? "" : @$" за ключем `{keyStr}`")} :** {Environment.NewLine}```";
 
             var list = 
                 RPKeyListGenerator
@@ -474,11 +406,9 @@ namespace CozyBot
                 await ch.SendMessageAsync(outputMsg);
             }
 
-            output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
-
             try
             {
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}");
             }
             catch
             {
@@ -518,9 +448,9 @@ namespace CozyBot
 
             List<string> outputMsgs = new List<string>();
 
-            string output = @"**Розширений список цитат " 
-                + (String.IsNullOrWhiteSpace(cmdKey) ? "" : @"за ключем `" + cmdKey + @"` ")
-                + ":**";
+            string output = 
+                $@"**Розширений список цитат " +
+                $@"{(String.IsNullOrWhiteSpace(cmdKey) ? "" : @$" за ключем `{cmdKey}`")} :** {Environment.NewLine}";
 
             string citation = String.Empty;
             string keyStr = String.Empty;
@@ -537,15 +467,17 @@ namespace CozyBot
                 {
                     continue;
                 }
-                if (citation.Length > _msgLengthLimit)
+                if (citation.Length > _msgLengthLimit) 
                 {
+                    // if file contents are longer than limit then skip file
                     continue;
                 }
-                keyStr = @"`" + kvp.Key + @"` :";
+                keyStr = $@"`{kvp.Key}` :";
                 if (output.Length + keyStr.Length + citation.Length < _msgLengthLimit)
                 {
-                    output += Environment.NewLine + keyStr;
-                    output += Environment.NewLine + citation;
+                    output = $"{output}{keyStr}{Environment.NewLine}{citation}{Environment.NewLine}";
+                    //output += Environment.NewLine + keyStr;
+                    //output += Environment.NewLine + citation;
                 }
                 else
                 {
@@ -561,10 +493,10 @@ namespace CozyBot
                 await ch.SendMessageAsync(outputMsg);
             }
 
-            var pingMsg = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
             try
             {
-                await msg.Channel.SendMessageAsync(pingMsg);
+                await msg.Channel.SendMessageAsync(
+                    $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}");
             }
             catch
             {
@@ -628,9 +560,8 @@ namespace CozyBot
 
                 await dm.SendMessageAsync(String.Empty, false, eb.Build());
 
-                string output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
-
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync(
+                    $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}");
             }
         }
 
