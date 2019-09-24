@@ -11,7 +11,7 @@ using Discord;
 using Discord.WebSocket;
 
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public class ArchiveModule : IGuildModule
     {
@@ -19,7 +19,8 @@ namespace DiscordBot1
 
         private static string _stringID = "ArchiveModule";
         private static string _moduleXmlName = "archive";
-        private static string _listFormat = "`{0,-25}Timer: {1,-6}Interval: {2,-6}Image: {3,-6}Last: {4,-20}Silent: {5,-6}`\n";
+        private static string _listFormat = 
+            $"`{0,-25}Timer: {1,-6}Interval: {2,-6}Image: {3,-6}Last: {4,-20}Silent: {5,-6}`{Environment.NewLine}";
 
         private string _workingPath;
         private int _minimumInterval =  1; // minutes = 1 min
@@ -101,9 +102,8 @@ namespace DiscordBot1
 
         public ArchiveModule(XElement configEl, List<ulong> adminIds, string workingPath, SocketGuild guild)
         {
-            _guild = guild ?? throw new NullReferenceException("Guild cannot be null!");
-
-            _configEl = configEl ?? throw new ArgumentNullException("Configuration Element cannot be null.");
+            _guild = Guard.NonNull(guild, nameof(guild));
+            _configEl = Guard.NonNull(configEl, nameof(configEl));
 
             _adminIds = adminIds;
 
@@ -122,7 +122,7 @@ namespace DiscordBot1
                 _configEl.Add(moduleConfigEl);
             }
 
-            _workingPath = workingPath ?? throw new ArgumentNullException("workingPath cannot be null!");
+            _workingPath = Guard.NonNullWhitespaceEmpty(workingPath, nameof(workingPath));
 
             if (!Directory.Exists(_workingPath))
             {
@@ -166,7 +166,7 @@ namespace DiscordBot1
             if (attr != null)
             {
                 string permStringValue = attr.Value;
-                string[] stringIds = permStringValue.Split(" ");
+                string[] stringIds = permStringValue.Trim().Split(" ");
                 if (stringIds.Length > 0)
                 {
                     for (int i = 0; i < stringIds.Length; i++)
@@ -470,7 +470,7 @@ namespace DiscordBot1
 
             IBotCommand dmpCmd =
                 new BotCommand(
-                    StringID + "-dumpcmd",
+                    $"{StringID}-dumpcmd",
                     dumpRule,
                     DumpCommand
                 );
@@ -487,7 +487,7 @@ namespace DiscordBot1
 
             IBotCommand configCmd =
                 new BotCommand(
-                    StringID + "-configcmd",
+                    $"{StringID}-configcmd",
                     cmdRule,
                     ConfigCommand
                 );
@@ -572,8 +572,8 @@ namespace DiscordBot1
         private async Task DumpChannel(ArchiveChannelProperties acp)
         {
             //DateTime opStartTime = DateTime.UtcNow;
-            List<Discord.IMessage> totalList = new List<Discord.IMessage>();
-            List<Discord.IMessage> imageList = new List<Discord.IMessage>();
+            List<IMessage> totalList = new List<IMessage>();
+            List<IMessage> imageList = new List<IMessage>();
 
             XElement currentChanneEl = null;
 
@@ -591,7 +591,7 @@ namespace DiscordBot1
             if (channel is SocketTextChannel)
             {
                 bool boundary = false;
-                Discord.IMessage boundaryMsg = null;
+                IMessage boundaryMsg = null;
 
                 var messages = await FetchMessages(channel as SocketTextChannel);
 
@@ -689,7 +689,7 @@ namespace DiscordBot1
                         {
                             IsInline = false,
                             Name = "Архівація",
-                            Value = "Збережено " + lines + " повідомлень у каналі " + _guild.GetChannel(acp.Id).Name
+                            Value = $"Збережено {lines} повідомлень у каналі {_guild.GetChannel(acp.Id).Name}"
                         };
 
                         var eb = new EmbedBuilder
@@ -706,13 +706,13 @@ namespace DiscordBot1
                         await ch.SendMessageAsync(String.Empty, false, eb.Build());
                     }
 
-                    String sendMsg = "Збережено " + lines + " повідомлень. " + EmojiCodes.Picardia;
+                    String sendMsg = $"Збережено {lines} повідомлень. {EmojiCodes.Picardia}";
 
                     //if (sendChannel != msg.Channel)
                     //{
                     //    try
                     //    {
-                    //        await msg.Channel.SendMessageAsync);
+
                     //    }
                     //    catch { }
                     //}
@@ -720,7 +720,7 @@ namespace DiscordBot1
                     {
                         try
                         {
-                            await sendChannel.SendMessageAsync("Збережено " + lines + " повідомлень. " + EmojiCodes.Picardia);
+                            await sendChannel.SendMessageAsync(sendMsg);
                         }
                         catch { }
                     }
@@ -744,7 +744,7 @@ namespace DiscordBot1
                             {
                                 IsInline = false,
                                 Name = "Архівація",
-                                Value = "Збережено " + images + " зображень у каналі " + _guild.GetChannel(acp.Id).Name
+                                Value = $"Збережено {lines} зображень у каналі {_guild.GetChannel(acp.Id).Name}"
                             };
 
                             var eb = new EmbedBuilder
@@ -765,7 +765,7 @@ namespace DiscordBot1
                         {
                             try
                             {
-                                await sendChannel.SendMessageAsync("Збережено " + images + " зображень. " + EmojiCodes.Picardia);
+                                await sendChannel.SendMessageAsync($"Збережено {images} зображень. {EmojiCodes.Picardia}");
                             }
                             catch { }
                         }
@@ -784,7 +784,7 @@ namespace DiscordBot1
 
             int lastNumber = -1;
             string lastLog = String.Empty;
-            var logs = Directory.EnumerateFiles(filepath, acp.Id + "-*.log");
+            var logs = Directory.EnumerateFiles(filepath, $"{acp.Id}-*.log");
 
             string tempStr;
 
@@ -805,8 +805,8 @@ namespace DiscordBot1
             if (lastNumber == -1)
             {
                 lastNumber = 0;
-                lastLog = acp.Id + "-" + lastNumber + ".log";
-                lastLog = filepath + lastLog;
+                lastLog = $"{filepath}{acp.Id}-{lastNumber}.log"; // + acp.Id + "-" + lastNumber + ".log";
+                //lastLog = filepath + lastLog;
             }
 
             if (File.Exists(lastLog))
@@ -814,29 +814,33 @@ namespace DiscordBot1
                 if ((new FileInfo(lastLog)).Length > 8388608)
                 {
                     lastNumber++;
-                    lastLog = filepath + acp.Id + "-" + lastNumber + ".log";
+                    //lastLog = filepath + acp.Id + "-" + lastNumber + ".log";
+                    lastLog = $"{filepath}{acp.Id}-{lastNumber}.log";
                 }
             }
 
-            string newString;
-            string nickname;
+            //string newString;
+            //string nickname;
             string timestamp;
             int lines = 0;
 
-            using (var sw = File.AppendText(lastLog))
+            using var sw = File.AppendText(lastLog);
+            foreach (var message in list)
             {
-                foreach (var message in list)
-                {
-                    if (message.Timestamp.UtcDateTime < acp.Last)
-                        continue;
-                    //if (message.Timestamp > end)
-                    //    break;
-                    timestamp = message.Timestamp.ToString("o");
-                    nickname = message.Author.Username;
-                    newString = String.Format("[{0}] : {1} : {2}", message.Timestamp, nickname, message.Content);
-                    await sw.WriteLineAsync(newString);
-                    lines++;
-                }
+                if (message.Timestamp.UtcDateTime < acp.Last)
+                    continue;
+                //if (message.Timestamp > end)
+                //    break;
+                timestamp = message.Timestamp.ToString("o"); // ???
+
+                //nickname = message.Author.Username;
+                //newString = String.Format("[{0}] : {1} : {2}", message.Timestamp, nickname, message.Content);
+                    
+                await sw.WriteLineAsync(
+                    $"[{message.Timestamp}] : {message.Author.Username} : {message.Content}"       
+                );
+                    
+                lines++;
             }
             return lines;
         }
@@ -864,48 +868,46 @@ namespace DiscordBot1
                 j += curCount;
             }
 
-            using (HttpClient hc = new HttpClient())
+            using HttpClient hc = new HttpClient();
+            
+            List<Task> tasklist = new List<Task>();
+
+            foreach (var messagesPerCore in splitList)
             {
-                List<Task> tasklist = new List<Task>();
-
-                foreach (var messagesPerCore in splitList)
-                {
-                    tasklist.Add(
-                        Task.Run(
-                            async () =>
+                tasklist.Add(
+                    Task.Run(
+                        async () =>
+                        {
+                            foreach (var message in messagesPerCore)
                             {
-                                foreach (var message in messagesPerCore)
+                                int num = 0;
+
+                                string timestamp = message.Timestamp.ToString("o").Replace(':', '-');
+
+                                foreach (var att in message.Attachments)
                                 {
-                                    int num = 0;
-
-                                    string timestamp = message.Timestamp.ToString("o").Replace(':', '-');
-
-                                    foreach (var att in message.Attachments)
-                                    {
-                                        string file = filepath + timestamp + "-" + num + Path.GetExtension(att.Url);
-                                        using (FileStream fs = new FileStream(file, FileMode.Create, FileAccess.Write))
-                                        {
-                                            var response = await hc.GetAsync(att.Url);
-                                            await response.Content.CopyToAsync(fs);
-                                        }
-                                        num++;
-                                        images++;
-                                    }
+                                    //string file = filepath + timestamp + "-" + num + Path.GetExtension(att.Url);
+                                    string file = $"{filepath}{timestamp}-{num}{Path.GetExtension(att.Url)}";
+                                    using FileStream fs = new FileStream(file, FileMode.Create, FileAccess.Write);
+                                    var response = await hc.GetAsync(att.Url);
+                                    await response.Content.CopyToAsync(fs);
+                                    num++;
+                                    images++;
                                 }
                             }
-                        )
-                    );
-                }
-
-                await Task.WhenAll(tasklist);
+                        }
+                    )
+                );
             }
+
+            await Task.WhenAll(tasklist);
 
             return images;
         }
 
-        private async Task<List<Discord.IMessage>> FetchMessages(SocketTextChannel textChannel)
+        private async Task<List<IMessage>> FetchMessages(SocketTextChannel textChannel)
         {
-            List<Discord.IMessage> list = new List<Discord.IMessage>();
+            List<IMessage> list = new List<IMessage>();
 
             var asyncMessages = textChannel.GetMessagesAsync();
             var enumerator = asyncMessages.GetEnumerator();
@@ -928,9 +930,9 @@ namespace DiscordBot1
             return list;
         }
 
-        private async Task<List<Discord.IMessage>> FetchMessages(SocketTextChannel textChannel, Discord.IMessage from, Discord.Direction direction)
+        private async Task<List<IMessage>> FetchMessages(SocketTextChannel textChannel, IMessage from, Discord.Direction direction)
         {
-            List<Discord.IMessage> list = new List<Discord.IMessage>();
+            List<IMessage> list = new List<IMessage>();
 
             var asyncMessages = textChannel.GetMessagesAsync(from, direction);
             var enumerator = asyncMessages.GetEnumerator();
@@ -940,6 +942,9 @@ namespace DiscordBot1
             // osu! spectator invite (finished ?), it throws an exception and
             // everything breaks.
             // Cannot/do not want to reproduce it atm.
+            // 24.09.2019
+            // No idea if that bug still persists.
+            // TODO : looks like this section needs rewriting/refactoring
 
             try
             {
@@ -953,7 +958,7 @@ namespace DiscordBot1
             }
             catch (Exception ex)
             {
-                Console.WriteLine(textChannel.Name);
+                //Console.WriteLine(textChannel.Name);
                 throw ex;
             }
             return list;
@@ -964,72 +969,55 @@ namespace DiscordBot1
             string content = msg.Content;
             string[] words = content.Split(" ");
 
-            if (words[1] == "list")
+            switch (words[1])
             {
-                //Debug
-                //ulong id = 0;
-                //try
-                //{
-                List<string> outputMsgs = new List<string>();
+                case "list":
+                    List<string> outputMsgs = new List<string>();
 
-                string output = String.Empty;
-                foreach (var kvp in _channels)
-                {
-                    if (output.Length > _msgLimit)
+                    string output = String.Empty;
+                    foreach (var kvp in _channels)
                     {
-                        outputMsgs.Add(output);
-                        output = String.Empty;
+                        if (output.Length > _msgLimit)
+                        {
+                            outputMsgs.Add(output);
+                            output = String.Empty;
+                        }
+
+                        if (_guild.GetChannel(kvp.Key) != null)
+                        {
+                            output += String.Format(
+                                _listFormat,
+                                _guild.GetChannel(kvp.Key).Name,
+                                kvp.Value.Timer,
+                                kvp.Value.Interval,
+                                kvp.Value.Image,
+                                kvp.Value.Last,
+                                kvp.Value.Silent
+                            );
+                        }
                     }
 
-                    // Debug
-                    //id = kvp.Key;
+                    outputMsgs.Add(output);
 
-                    if (_guild.GetChannel(kvp.Key) != null)
+                    foreach (var outputMsg in outputMsgs)
                     {
-                        output += String.Format(
-                            _listFormat,
-                            _guild.GetChannel(kvp.Key).Name,
-                            kvp.Value.Timer,
-                            kvp.Value.Interval,
-                            kvp.Value.Image,
-                            kvp.Value.Last,
-                            kvp.Value.Silent
-                        );
+                        await msg.Channel.SendMessageAsync(outputMsg);
                     }
-                }
-
-                outputMsgs.Add(output);
-
-                foreach (var outputMsg in outputMsgs)
-                {
-                    await msg.Channel.SendMessageAsync(outputMsg);
-                }
-                //}
-                //    catch (Exception ex)
-                //    {
-                //        // Debug
-                //        Console.WriteLine(id);
-                //        Console.WriteLine(ex.Message);
-                //        Console.WriteLine(ex.StackTrace);
-                //    }
-            }
-
-            if ((words[1] == "perm") && words.Length > 3)
-            {
-                await PermissionControlCommand(words[2], msg);
-            }
-
-            if (words[1] == "setlog")
-            {
-                await SetLogCommand(words[2], msg);
-                await msg.Channel.SendMessageAsync("Налаштування було змінено " + EmojiCodes.Picardia);
-                return;
-            }
-
-            if (msg.MentionedChannels.Count <= 0)
-            {
-                return;
-            }
+                    return;
+                case "perm" when words.Length > 3:
+                    await PermissionControlCommand(words[2], msg);
+                    return;
+                case "setlog":
+                    await SetLogCommand(words[2], msg);
+                    await msg.Channel.SendMessageAsync($"Налаштування було змінено {EmojiCodes.Picardia}");
+                    return;
+                default:
+                    if (msg.MentionedChannels.Count <= 0)
+                    {
+                        return;
+                    }
+                    break;
+            };
 
             List<ulong> existingChannels = new List<ulong>();
 
@@ -1068,36 +1056,23 @@ namespace DiscordBot1
                             new XAttribute("interval", _minimumInterval),
                             new XAttribute("image", false.ToString()),
                             new XAttribute("silent", true.ToString()),
-                            _workingPath + @"archive\" + mentionedChannel.Id + @"\"
+                            $@"{_workingPath}archive\{mentionedChannel.Id}\"
                         );
                     _moduleConfigEl.Add(currentChannelEl);
                 }
 
                 foreach (var word in words)
                 {
-                    switch (word)
+                    var _ = word switch
                     {
-                        case "+timer":
-                            currentChannelEl.Attribute("timer").Value = true.ToString();
-                            break;
-                        case "-timer":
-                            currentChannelEl.Attribute("timer").Value = false.ToString();
-                            break;
-                        case "+img":
-                            currentChannelEl.Attribute("image").Value = true.ToString();
-                            break;
-                        case "-img":
-                            currentChannelEl.Attribute("image").Value = false.ToString();
-                            break;
-                        case "+silent":
-                            currentChannelEl.Attribute("silent").Value = Boolean.TrueString;
-                            break;
-                        case "-silent":
-                            currentChannelEl.Attribute("silent").Value = Boolean.FalseString;
-                            break;
-                        default:
-                            break;
-                    }
+                        "+timer"  => currentChannelEl.Attribute("timer" ).Value = Boolean. TrueString,
+                        "-timer"  => currentChannelEl.Attribute("timer" ).Value = Boolean.FalseString,
+                        "+img"    => currentChannelEl.Attribute("image" ).Value = Boolean. TrueString,
+                        "-img"    => currentChannelEl.Attribute("image" ).Value = Boolean.FalseString,
+                        "+silent" => currentChannelEl.Attribute("silent").Value = Boolean. TrueString,
+                        "-silent" => currentChannelEl.Attribute("silent").Value = Boolean.FalseString,
+                        _ => String.Empty
+                    };
                     if (Int32.TryParse(word, out int interval))
                     {
                         if (interval >= _minimumInterval)
@@ -1106,6 +1081,7 @@ namespace DiscordBot1
                         }
                     }
                 }
+               
             }
 
             await RaiseConfigChanged(_configEl);
@@ -1113,8 +1089,7 @@ namespace DiscordBot1
             GenerateChannels(_moduleConfigEl);
             GenerateTimers();
 
-            await msg.Channel.SendMessageAsync("Налаштування було змінено " + EmojiCodes.Picardia);
-
+            await msg.Channel.SendMessageAsync($"Налаштування було змінено {EmojiCodes.Picardia}");
         }
 
         protected virtual async Task SetLogCommand(string channelStr, SocketMessage msg)
@@ -1170,7 +1145,7 @@ namespace DiscordBot1
                     break;
             }
 
-            await msg.Channel.SendMessageAsync("Дозволи було змінено " + EmojiCodes.Picardia);
+            await msg.Channel.SendMessageAsync($"Дозволи було змінено {EmojiCodes.Picardia}");
         }
 
         protected virtual async Task ModifyPermissions(XAttribute attr, List<ulong> ids)
@@ -1179,7 +1154,7 @@ namespace DiscordBot1
 
             foreach (var id in ids)
             {
-                newValue += id.ToString();
+                newValue += $"{id} ";
             }
 
             attr.Value = newValue;

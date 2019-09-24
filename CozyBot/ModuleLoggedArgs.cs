@@ -4,7 +4,7 @@ using System.Text;
 
 using Discord;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     public class ModuleLoggedArgs : EventArgs
     {

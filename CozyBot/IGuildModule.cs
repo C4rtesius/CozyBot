@@ -4,7 +4,7 @@ using System.Text;
 
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     interface IGuildModule : IBotModule
     {

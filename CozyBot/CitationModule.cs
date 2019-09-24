@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 using Discord;
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     /// <summary>
     /// ContentModule specialization - works with citations.

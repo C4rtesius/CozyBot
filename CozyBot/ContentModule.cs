@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 using Discord.WebSocket;
 
-namespace DiscordBot1
+namespace CozyBot
 {
     /// <summary>
     /// Abstract Class describes user content, which can be saved and posted by bot.
@@ -251,7 +251,7 @@ namespace DiscordBot1
             if (attr != null)
             {
                 string permStringValue = attr.Value;
-                string[] stringIds = permStringValue.Split(" ");
+                string[] stringIds = permStringValue.Trim().Split(" ");
                 if (stringIds.Length > 0)
                 {
                     for (int i = 0; i < stringIds.Length; i++)
@@ -800,7 +800,7 @@ namespace DiscordBot1
 
             foreach (var id in ids)
             {
-                newValue += id.ToString();
+                newValue += $"{id} ";
             }
 
             attr.Value = newValue;
