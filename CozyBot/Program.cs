@@ -86,6 +86,9 @@ namespace CozyBot
 
         private async Task ConfigGuilds()
         {
+            // 26.09.2019 Debug
+            Console.WriteLine("ConfigGuilds Triggered");
+            //
             var guilds = _client.Guilds;
             foreach (var guild in guilds)
             {
@@ -110,7 +113,7 @@ namespace CozyBot
 
                 _ctrlEventHandler += newBot.OnCtrlEvent;
 
-                _guildBotsDict.Add(guildID, newBot);
+                _guildBotsDict.TryAdd(guildID, newBot);
             }
         }
 
