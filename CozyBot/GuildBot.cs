@@ -349,7 +349,7 @@ namespace CozyBot
                     return;
             }
 
-            if (size > Int32.MaxValue || num > Int32.MaxValue)
+            if (size == 0 || num == 0)
             {
                 return;
             }
