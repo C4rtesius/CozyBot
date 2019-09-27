@@ -744,7 +744,7 @@ namespace CozyBot
                             {
                                 IsInline = false,
                                 Name = "Архівація",
-                                Value = $"Збережено {lines} зображень у каналі {_guild.GetChannel(acp.Id).Name}"
+                                Value = $"Збережено {images} зображень у каналі {_guild.GetChannel(acp.Id).Name}"
                             };
 
                             var eb = new EmbedBuilder
