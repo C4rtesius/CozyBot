@@ -357,6 +357,7 @@ namespace CozyBot
             Random rng = new Random(DateTime.Now.Millisecond);
             for (int i = 0; i < num; i++)
             {
+
                 result += (ulong)rng.Next(1, size);
             }
 

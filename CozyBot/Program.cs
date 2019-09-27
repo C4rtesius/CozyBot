@@ -86,8 +86,8 @@ namespace CozyBot
 
         private async Task ConfigGuilds()
         {
-            // 26.09.2019 Debug
-            Console.WriteLine("ConfigGuilds Triggered");
+            // Debug
+            // Console.WriteLine("ConfigGuilds Triggered");
             //
             var guilds = _client.Guilds;
             foreach (var guild in guilds)
