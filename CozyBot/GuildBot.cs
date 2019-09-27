@@ -292,7 +292,7 @@ namespace CozyBot
                 case 1:
                     break;
                 case 2:
-                    Regex diceregex = new Regex(@"^(?<dicenum>\d)[dD](?<dicesize>\d)$", RegexOptions.Compiled);
+                    Regex diceregex = new Regex(@"^(?<dicenum>\d+)[dD](?<dicesize>\d+)$", RegexOptions.Compiled);
                     var dicematch = diceregex.Match(words[1]);
 
                     if (dicematch != Match.Empty)
