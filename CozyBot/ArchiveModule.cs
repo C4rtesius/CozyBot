@@ -20,7 +20,7 @@ namespace CozyBot
         private static string _stringID = "ArchiveModule";
         private static string _moduleXmlName = "archive";
         private static string _listFormat = 
-            $"`{0,-25}Timer: {1,-6}Interval: {2,-6}Image: {3,-6}Last: {4,-20}Silent: {5,-6}`{Environment.NewLine}";
+            "`{0,-25}Timer: {1,-6}Interval: {2,-6}Image: {3,-6}Last: {4,-20}Silent: {5,-6}`" + Environment.NewLine;
 
         private string _workingPath;
         private int _minimumInterval =  1; // minutes = 1 min
