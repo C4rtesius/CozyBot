@@ -6,14 +6,14 @@ namespace CozyBot
 {
     public static class EmojiCodes
     {
-        public static string Picardia => @"<:picardia:540541064969191445>";
-        public static string Pizdec => @"<:pizdec:334783018549903376>";
-        public static string Pepe => @"<:pepe:540540414793482250>";
-        public static string Thonk => @"<:thonk:540540493088423938>";
-        public static string BobRoss => @"<:bobross:540540035729195025>";
-        public static string DankPepe => @"<:dankpepe:540540295713128449>";
+        public static string Picardia => @"<:picardia:650481847415078922>";
+        public static string Pizdec => @"<:pizdec:651834427122515978>";
+        public static string Pepe => @"<:pepe:650482089124298782>";
+        public static string Thonk => @"<:thonk:650480665481052170>";
+        public static string BobRoss => @"<:bobross:650481918378246164>";
+        public static string DankPepe => @"<:dankpepe:650482107084177429>";
         public static string Bumagi => @"<:bumagi:580709087243796480>";
-        public static string WaitWhat => @"<:waitwhat:540540454559547422>";
-        public static string Tomas => @"<:tomas:540540188632416256>";
+        public static string WaitWhat => @"<:waitwhat:650482067641073684>";
+        public static string Tomas => @"<:tomas:650480523143151636>";
     }
 }
