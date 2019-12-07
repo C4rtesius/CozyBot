@@ -923,7 +923,7 @@ namespace CozyBot
             }
             catch (Exception ex)
             {
-                Console.WriteLine(textChannel.Name);
+                Console.WriteLine($"[EXCEPT] Fetch Messages failed : {textChannel.Name}");
                 throw ex;
             }
 
