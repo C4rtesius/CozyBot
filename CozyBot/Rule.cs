@@ -9,124 +9,86 @@ namespace CozyBot
     public class Rule
     {
         //Private Fields
-        private Predicate<SocketMessage> _rule;
+        private readonly Predicate<SocketMessage> _rule;
 
-        private static Rule _trueRule;
-        private static Rule _falseRule;
+        private static readonly Predicate<SocketMessage> _truePredicate = (_) => true;
 
-        public static Rule TrueRule
-        {
-            get
-            {
-                return _trueRule;
-            }
-        }
+        public static Rule TrueRule { get; private set; }
 
-        public static Rule FalseRule
-        {
-            get
-            {
-                return _falseRule;
-            }
-        }
+        public static Rule FalseRule { get; private set; }
 
         static Rule()
         {
-            _trueRule = new Rule((msg) => { return true; });
-            _falseRule = new Rule((msg) => { return false; });
+            TrueRule  = new Rule(_truePredicate);
+            FalseRule = new Rule((_) => false);
         }
 
         public Rule(Predicate<SocketMessage> rule)
         {
             if (rule == null)
-            {
-                _rule = (msg) => { return true; };
-            }
-
-            _rule = rule;
+                _rule = _truePredicate;
+            else
+                _rule = rule;
         }
 
         public bool Check(SocketMessage msg)
-        {
-            return _rule(msg);
-        }
+            => _rule(msg);
 
-        public static Rule operator& (Rule rule1, Rule rule2)
+        public static Rule operator &(Rule rule1, Rule rule2)
         {
-            if (rule1 == _falseRule
-                || rule2 == _falseRule)
-            {
-                return _falseRule;
-            }
+            if (rule1 == FalseRule || rule2 == FalseRule)
+                return FalseRule;
 
-            if (rule1 == _trueRule)
-            {
+            if (rule1)
                 return rule2;
-            }
 
-            if (rule2 == _trueRule)
-            {
+            if (rule2)
                 return rule1;
-            }
-
-            return new Rule (
-                (msg) =>
-                {
-                    return rule1._rule(msg) && rule2._rule(msg);
-                }
-            );
-        }
-
-        public static Rule operator| (Rule rule1, Rule rule2)
-        {
-            if (rule1 == _trueRule 
-                || rule2 == _trueRule)
-            {
-                return _trueRule;
-            }
-
-            if (rule1 == _falseRule)
-            {
-                return rule2;
-            }
-
-            if (rule2 == _falseRule)
-            {
-                return rule1;
-            }
 
             return new Rule(
-                (msg) =>
-                {
-                    return rule1._rule(msg) || rule2._rule(msg);
-                }
-            );
+                (msg) => rule1._rule(msg) && rule2._rule(msg));
         }
 
-        public static Rule operator! (Rule rule)
+        public static Rule operator |(Rule rule1, Rule rule2)
         {
-            if (rule == _falseRule)
-            {
-                return _trueRule;
-            }
+            if (rule1 == TrueRule || rule2 == TrueRule)
+                return TrueRule;
 
-            if (rule == _trueRule)
-            {
-                return _falseRule;
-            }
+            if (rule1 == FalseRule)
+                return rule2;
 
-            return new Rule((msg) => { return !rule._rule(msg); });
+            if (rule2 == FalseRule)
+                return rule1;
+
+            return new Rule(
+                (msg) => rule1._rule(msg) || rule2._rule(msg));
+        }
+
+        public static Rule operator ^(Rule rule1, Rule rule2)
+        {
+            if (rule1 == rule2)
+                return FalseRule;
+
+            return new Rule(
+                (msg) => rule1._rule(msg) ^ rule2._rule(msg));
+        }
+
+        public static Rule operator !(Rule rule)
+        {
+            if (rule == FalseRule)
+                return TrueRule;
+
+            if (rule == TrueRule)
+                return FalseRule;
+
+            return new Rule((msg) => !rule._rule(msg));
         }
 
         public static bool operator true(Rule rule)
-        {
-            return rule == _trueRule;
-        }
+            => rule == TrueRule;
 
         public static bool operator false(Rule rule)
-        {
-            return rule == _falseRule;
-        }
+            => rule == FalseRule;
 
     }
 }
