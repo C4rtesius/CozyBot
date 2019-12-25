@@ -22,7 +22,7 @@ namespace CozyBot
                         foreach (var att in atts)
                             if (IsImage(att))
                                 return true;
-                    
+
                     return false;
                 }
             );
@@ -50,18 +50,27 @@ namespace CozyBot
             => new Rule((msg) => text == msg.Content);
 
         public static Rule PrefixatedCommand(string prefix, string cmdName)
-            => new Rule((msg) => msg.Content.Split(" ")[0].CompareTo($"{prefix}{cmdName}") == 0);
-                    //string text = msg.Content;
-                    //if (text.StartsWith(prefix))
-                    //{
-                    //    string deprefixed = text.Remove(0, prefix.Length);
-                    //    string[] words = deprefixed.Split(" ");
-                    //    if (String.Compare(cmdName, words[0]) == 0)
-                    //    {
-                    //        return true;
-                    //    }
-                    //}
-                    //return false;
+            //=> new Rule((msg) => ((Func<string, string, bool>)((str, prfx) => (str.CompareTo(prfx) == 0) || str.StartsWith(prfx)))(msg.Content.Trim(), $"{prefix}{cmdName}"));
+            => new Rule(
+                (msg) =>
+                {
+                    if (!msg.Content.StartsWith($"{prefix}{cmdName}"))
+                        return false;
+                    //msg.Content.Split(" ")[0].CompareTo($"{prefix}{cmdName}") == 0;
+                    return false;
+                }
+            );
+        //string text = msg.Content;
+        //if (text.StartsWith(prefix))
+        //{
+        //    string deprefixed = text.Remove(0, prefix.Length);
+        //    string[] words = deprefixed.Split(" ");
+        //    if (String.Compare(cmdName, words[0]) == 0)
+        //    {
+        //        return true;
+        //    }
+        //}
+        //return false;
 
         public static Rule TextTriggerSingle(string trigger)
             => new Rule((msg) => msg.Content.Contains(trigger));
