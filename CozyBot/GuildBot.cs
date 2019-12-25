@@ -194,6 +194,12 @@ namespace CozyBot
                     archiveModule.GuildBotConfigChanged += ArchiveModule_ConfigChanged;
                     CtrlEvent += archiveModule.OnCtrlEvent;
                 }
+                if (modulesEl.Element("pxls-alerts") != null)
+                {
+                    PxlsAlertsModule pxlsModule = new PxlsAlertsModule(modulesEl, _adminIds, _guild, _guildPath);
+                    _modulesDict.Add(pxlsModule.StringID, pxlsModule);
+                    //pxlsModule.GuildBotConfigChanged +=
+                }
             }
         }
 
