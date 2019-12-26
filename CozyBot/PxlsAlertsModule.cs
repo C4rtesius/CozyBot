@@ -14,7 +14,6 @@ using Discord.WebSocket;
 
 using SixLabors.ImageSharp;
 using SixLabors.Primitives;
-using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -184,13 +183,13 @@ namespace CozyBot
             var offsetyRegex = new Regex(_offsetyRegexPattern, RegexOptions.Compiled);
             
             var templateMatch = templateRegex.Match(_inputUri);
-            var offsetxMatch = offsetxRegex.Match(_inputUri).Groups[1].Value;
-            var offsetyMatch = offsetyRegex.Match(_inputUri).Groups[1].Value;
+            var offsetxString = offsetxRegex.Match(_inputUri).Groups[1].Value;
+            var offsetyString = offsetyRegex.Match(_inputUri).Groups[1].Value;
 
             if (!Uri.TryCreate(templateMatch.Groups["uri"].Value, UriKind.RelativeOrAbsolute, out Uri uri))
 #if DEBUG
             {
-                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{uri}");
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{templateMatch.Groups["uri"].Value}");
                 return;
             }
 #else
@@ -207,19 +206,19 @@ namespace CozyBot
 #else
                 return;
 #endif
-            if (!Int32.TryParse(offsetxMatch, out int offsetx))
+            if (!Int32.TryParse(offsetxString, out int offsetx))
 #if DEBUG
             {
-                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsetx :{offsetxMatch}");
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsetx :{offsetxString}");
                 return;
             }
 #else
                 return;
 #endif
-            if (!Int32.TryParse(offsetyMatch, out int offsety))
+            if (!Int32.TryParse(offsetyString, out int offsety))
 #if DEBUG
             {
-                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsety :{offsetxMatch}");
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsety :{offsetxString}");
                 return;
             }
 #else
@@ -301,24 +300,75 @@ namespace CozyBot
             Console.WriteLine($"[DEBUG][PXLS-ALERTS] Image detemplatized.");
 #endif
 
-
-            int totalPxls = img.GetPixelSpan().ToArray().Where(x => x.A != 0).Count();
+            int totalPxls = 0;
             int wrongPxls = 0;
-
-            using var wrongMap = new Image<Rgba32>(Configuration.Default, img.Width, img.Height, Rgba32.Transparent);
 
             var transparent = new Rgba32(0, 0, 0, 0);
 
-            for (int x = 0; x < img.Width; x++)
+            int xLow;
+            int xHigh;
+            int yLow;
+            int yHigh;
+
+            if (offsetx < 0)
             {
-                for (int y = 0; y < img.Height; y++)
+                xLow = -offsetx;
+                if (offsetx + img.Width < 0)
+                    return;
+                else if (offsetx + img.Width >= canvasData.Width)
+                    xHigh = img.Width - canvasData.Width + offsetx;
+                else
+                    xHigh = img.Width;
+            }
+            else if (offsetx >= canvasData.Width)
+            {
+                return;
+            }
+            else
+            {
+                xLow = 0;
+                if (offsetx + img.Width < canvasData.Width)
+                    xHigh = img.Width;
+                else
+                    xHigh = canvasData.Width - offsetx;
+            }
+
+            if (offsety < 0)
+            {
+                yLow = -offsety;
+                if (offsety + img.Height < 0)
+                    return;
+                else if (offsety + img.Height >= canvasData.Height)
+                    yHigh = img.Height - canvasData.Height + offsety;
+                else
+                    yHigh = img.Height;
+            }
+            else if (offsety >= canvasData.Height)
+                return;
+            else
+            {
+                yLow = 0;
+                if (offsety + img.Height < canvasData.Height)
+                    yHigh = img.Height;
+                else
+                    yHigh = canvasData.Height - offsety;
+            }
+
+            using var wrongMap = new Image<Rgba32>(Configuration.Default, xHigh - xLow, yHigh - yLow, Rgba32.Transparent);
+
+            for (int x = 0; x < xHigh - xLow; x++)
+            {
+                for (int y = 0; y < yHigh - yLow; y++)
                 {
-                    if (img[x, y] != transparent)
-                        if (canvasData[offsetx + x, offsety + y] != img[x, y])
+                    if (img[x + xLow, y + yLow] != transparent)
+                    {
+                        totalPxls++;
+                        if (canvasData[offsetx + x + xLow, offsety + y + yLow] != img[x + xLow, y + yLow])
                         {
                             wrongPxls++;
                             wrongMap[x, y] = Rgba32.Red;
                         }
+                    }
                 }
             }
 
@@ -330,16 +380,70 @@ namespace CozyBot
             float amountT = 0.7f;
             int border = 20;
             using var res = canvasData.Canvas.Clone();
+
+            if (offsetx < 0)
+            {
+                xLow = 0;
+                if (wrongMap.Width + border >= canvasData.Width)
+                    xHigh = canvasData.Width;
+                else
+                    xHigh = wrongMap.Width + border;
+            }
+            else if (offsetx - border < 0)
+            {
+                xLow = 0;
+                if (wrongMap.Width + border + offsetx >= canvasData.Width)
+                    xHigh = canvasData.Width;
+                else
+                    xHigh = wrongMap.Width + border + offsetx;
+            }
+            else
+            {
+                xLow = offsetx - border;
+                if (wrongMap.Width + border + offsetx >= canvasData.Width)
+                    xHigh = border - offsetx + canvasData.Width;
+                else
+                    xHigh = 2 * border + wrongMap.Width;
+            }
+
+            if (offsety < 0)
+            {
+                yLow = 0;
+                if (wrongMap.Height + border >= canvasData.Height)
+                    yHigh = canvasData.Height;
+                else
+                    yHigh = wrongMap.Height + border;
+            }
+            else if (offsety - border < 0)
+            {
+                yLow = 0;
+                if (wrongMap.Height + border + offsety >= canvasData.Height)
+                    yHigh = canvasData.Height;
+                else
+                    yHigh = wrongMap.Height + border + offsety;
+            }
+            else
+            {
+                yLow = offsety - border;
+                if (wrongMap.Height + border + offsety >= canvasData.Height)
+                    yHigh = border - offsety + canvasData.Height;
+                else
+                    yHigh = 2 * border + wrongMap.Height;
+            }
+
+            var newSize = (xHigh > yHigh) ? new Size(800, (int)(yHigh * 800f / xHigh)) : new Size((int)(xHigh * 800f / yHigh), 800);
+            var resampler = (xHigh > yHigh) ? ((xHigh > 800) ? KnownResamplers.Bicubic : KnownResamplers.NearestNeighbor) :
+                (yHigh > 800) ? KnownResamplers.Bicubic : KnownResamplers.NearestNeighbor;
+
             GraphicsOptions go = new GraphicsOptions { ColorBlendingMode = PixelColorBlendingMode.Subtract, BlendPercentage = amountT };
-            var newSize = (img.Width > img.Height) ? new Size(800, (int)(img.Height * 800f / img.Width)) : new Size((int)(img.Width * 800f / img.Height), 800);
-            ResizeOptions ro = new ResizeOptions { Mode = ResizeMode.Stretch, Position = AnchorPositionMode.Center, Sampler = KnownResamplers.Bicubic, Size = newSize };
+            ResizeOptions ro = new ResizeOptions { Mode = ResizeMode.Stretch, Position = AnchorPositionMode.Center, Sampler = resampler, Size = newSize };
+
             res.Mutate(
                 o =>
-                    o.Crop(new Rectangle(offsetx - border, offsety - border, img.Width + 2 * border, img.Height + 2 * border))
-                    //.Fill(go, Rgba32.Black, new Rectangle(border, border, img.Width, img.Height))
-                    .Brightness(amountC)
-                    .DrawImage(img, new Point(border, border), go)
-                    .DrawImage(wrongMap, new Point(border, border), 1.0f)
+                    o.Brightness(amountC)
+                    .DrawImage(img, new Point(offsetx, offsety), go)
+                    .DrawImage(wrongMap, new Point((offsetx < 0) ? 0 : offsetx, (offsety < 0) ? 0 : offsety), 1.0f)
+                    .Crop(new Rectangle(xLow, yLow, xHigh, yHigh))
                     .Resize(ro)
             );
 
@@ -514,14 +618,14 @@ namespace CozyBot
             {
                 for (int jj = 0; jj < tempSize; jj++)
                 {
-                    int x = i + ii;
-                    int y = j + jj;
-                    var c = template[x, y];
+                    var c = template[i + ii, j + jj];
                     if (c.A == 0)
                         continue;
                     if (!palette.Contains(c))
                         continue;
+
                     trFlag = false;
+                    
                     if (refColour == Rgba32.Transparent)
                     {
                         refColour = c;
