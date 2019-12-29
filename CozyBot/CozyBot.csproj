@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-    <PublishReadytToRun>true</PublishReadytToRun>
-    <PublishTrimmed>true</PublishTrimmed>
+    <!--<PublishReadytToRun>true</PublishReadytToRun>
+    <PublishTrimmed>true</PublishTrimmed>-->
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,7 +38,10 @@
   <ItemGroup>
     <None Remove="config - Copy.xml" />
     <None Remove="DiscordBot1.zip" />
+    <None Remove="publish-Debug.tar" />
+    <None Remove="publish-Debug.tar.xz" />
     <None Remove="publish.bat" />
+    <None Remove="remote.txt" />
   </ItemGroup>
 
   <ItemGroup>

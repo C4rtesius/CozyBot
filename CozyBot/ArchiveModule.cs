@@ -128,9 +128,9 @@ namespace CozyBot
             {
                 Directory.CreateDirectory(_workingPath);
             }
-            if (!Directory.Exists(_workingPath + @"archive\"))
+            if (!Directory.Exists(Path.Combine(_workingPath, "archive")))
             {
-                Directory.CreateDirectory(_workingPath + @"archive\");
+                Directory.CreateDirectory(Path.Combine(_workingPath, "archive"));
             }
 
             Configure(_configEl);
@@ -449,12 +449,12 @@ namespace CozyBot
                 }
                 else
                 {
-                    filepath = _workingPath + @"archive\" + id + @"\";
+                    filepath = Path.Combine(_workingPath, "archive", id.ToString());
                 }
             }
             else
             {
-                filepath = _workingPath + @"archive\" + id + @"\";
+                filepath = Path.Combine(_workingPath, "archive", id.ToString());
                 channelEl.Value = filepath;
             }
 
@@ -805,7 +805,7 @@ namespace CozyBot
             if (lastNumber == -1)
             {
                 lastNumber = 0;
-                lastLog = $"{filepath}{acp.Id}-{lastNumber}.log"; // + acp.Id + "-" + lastNumber + ".log";
+                lastLog = Path.Combine(filepath, $"{acp.Id}-{lastNumber}.log"); // + acp.Id + "-" + lastNumber + ".log";
                 //lastLog = filepath + lastLog;
             }
 
@@ -815,7 +815,7 @@ namespace CozyBot
                 {
                     lastNumber++;
                     //lastLog = filepath + acp.Id + "-" + lastNumber + ".log";
-                    lastLog = $"{filepath}{acp.Id}-{lastNumber}.log";
+                    lastLog = Path.Combine(filepath, $"{acp.Id}-{lastNumber}.log");
                 }
             }
 
@@ -887,7 +887,7 @@ namespace CozyBot
                                 foreach (var att in message.Attachments)
                                 {
                                     //string file = filepath + timestamp + "-" + num + Path.GetExtension(att.Url);
-                                    string file = $"{filepath}{timestamp}-{num}{Path.GetExtension(att.Url)}";
+                                    string file = Path.Combine(filepath, $"{timestamp}-{num}{Path.GetExtension(att.Url)}");
                                     using FileStream fs = new FileStream(file, FileMode.Create, FileAccess.Write);
                                     var response = await hc.GetAsync(att.Url);
                                     await response.Content.CopyToAsync(fs);
@@ -923,7 +923,7 @@ namespace CozyBot
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[EXCEPT] Fetch Messages failed : {textChannel.Name}");
+                Console.WriteLine($"[EXCEPT][ARCHIVEMODULE] Fetch Messages failed : {textChannel.Name}");
                 throw ex;
             }
 

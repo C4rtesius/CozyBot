@@ -196,7 +196,7 @@ namespace CozyBot
             string guildPath
             )
         {
-            _configEl = configEl ?? throw new ArgumentNullException("Configuration Element cannot be null.");
+            _configEl = Guard.NonNull(configEl, nameof(configEl));
 
             _adminIds = adminIds;
 
@@ -214,8 +214,8 @@ namespace CozyBot
 
                 _configEl.Add(moduleConfigEl);
             }
-
-            _guildPath = guildPath ?? throw new ArgumentNullException("guildPath cannot be null!");
+            
+            _guildPath = Guard.NonNullWhitespaceEmpty(guildPath, nameof(guildPath));
 
             if (!Directory.Exists(_guildPath))
             {

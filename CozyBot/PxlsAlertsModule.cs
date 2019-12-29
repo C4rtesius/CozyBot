@@ -23,7 +23,7 @@ namespace CozyBot
     {
         private static string _stringID => "PxlsAlertsModule";
         private static string _moduleXmlName => "pxls-alerts";
-        private static string _moduleFolder => @"pxls-alerts\";
+        private static string _moduleFolder => @"pxls-alerts";
 
         private SocketGuild _guild;
 
@@ -45,7 +45,7 @@ namespace CozyBot
 
         static HttpClient _hc = new HttpClient();
 
-        private string _modulePath => _guildPath + _moduleFolder;
+        private string _modulePath => Path.Combine(_guildPath, _moduleFolder);
 
         public string StringID => _stringID;
         public SocketGuild Guild => _guild;
@@ -228,7 +228,7 @@ namespace CozyBot
 #if DEBUG
             Console.WriteLine($"[DEBUG][PXLS-ALERTS] Checks passed.");
 #endif
-            string rawTemplatePath = $"{_modulePath}{output}";
+            string rawTemplatePath = Path.Combine(_modulePath, output);
 
             try
             {
@@ -250,7 +250,7 @@ namespace CozyBot
             SixLabors.ImageSharp.Image<Rgba32> template;
             try
             {
-                template = SixLabors.ImageSharp.Image.Load(_modulePath + output).CloneAs<Rgba32>();
+                template = SixLabors.ImageSharp.Image.Load(Path.Combine(_modulePath, output)).CloneAs<Rgba32>();
             }
             catch (Exception ex)
             {
@@ -283,7 +283,7 @@ namespace CozyBot
 
             var img = Detemplatize(template, symbolSize, canvasData.Palette.Values);
             
-            string pngImagePath = $"{_modulePath}{output}.png";
+            string pngImagePath = Path.Combine(_modulePath, $"{output}.png");
             try
             {
                 using (var fs = new FileStream(pngImagePath, FileMode.Create, FileAccess.ReadWrite))
@@ -450,7 +450,7 @@ namespace CozyBot
 #if DEBUG
             Console.WriteLine($"[DEBUG][PXLS-ALERTS] Wrongmap image processed and formed.");
 #endif
-            string wrongMapFilePath = $"{_modulePath}{output}_wrongmap.png";
+            string wrongMapFilePath = Path.Combine(_modulePath, $"{output}_wrongmap.png");
 
             try
             {

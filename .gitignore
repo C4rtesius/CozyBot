@@ -260,3 +260,6 @@ paket-files/
 __pycache__/
 *.pyc
 /CozyBot/508416694411067442
+/CozyBot/publish-Debug.tar
+/CozyBot/publish-Debug.tar.xz
+/CozyBot/remote.txt

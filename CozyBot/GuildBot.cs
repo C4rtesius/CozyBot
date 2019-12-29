@@ -84,7 +84,7 @@ namespace CozyBot
 
             _guildPath = guildPath ?? throw new ArgumentNullException("configPath cannot be null");
 
-            _configPath = _guildPath + "config.xml";
+            _configPath = Path.Combine(_guildPath, "config.xml");
 
             _clientId = clientId;
 
@@ -134,16 +134,25 @@ namespace CozyBot
             }
         }
 
-        public async void OnCtrlEvent(CtrlType type)
+        public void OnCtrlEvent(CtrlType type)
         {
             _ctrlEvent.Invoke(type);
 
-            await SaveConfig();
+            Task.Run(() => SaveConfig()).GetAwaiter().GetResult();
         }
 
 
         private void LoadConfig()
         {
+#if DEBUG
+            Console.WriteLine($"[DEBUG][GUILDBOT] _configPath :{_configPath}");
+            Console.WriteLine($"[DEBUG][GUILDBOT] Exists(_configPath) :{File.Exists(_configPath)}");
+            if (File.Exists(_configPath))
+            {
+                //Console.WriteLine($"[DEBUG][GUILDBOT] Contents of _configPath :{File.ReadAllText(_configPath)}");
+                Console.WriteLine($"[DEBUG][GUILDBOT] Full Path :{Path.GetFullPath(_configPath)}");
+            }
+#endif
             using (var stream = File.Open(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 _config = XDocument.Load(stream);

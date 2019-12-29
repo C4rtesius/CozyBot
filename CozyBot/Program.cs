@@ -14,8 +14,8 @@ namespace CozyBot
     public class Program 
     {
         #region DLL Import
-        [DllImport("Kernel32.dll")]
-        private static extern bool SetConsoleCtrlHandler(CtrlEventHandler handler, bool add);
+        //[DllImport("Kernel32.dll")]
+        //private static extern bool SetConsoleCtrlHandler(CtrlEventHandler handler, bool add);
 
         #endregion
 
@@ -23,8 +23,9 @@ namespace CozyBot
 
         private string _prefix;
         private string _token;
+        private string _appBaseDirectory;
 
-        private string _configPath = "config.xml";
+        private string _configFileName = "config.xml";
         private XDocument _config;
 
         private DiscordSocketClient _client;
@@ -44,11 +45,14 @@ namespace CozyBot
         {
             try
             {
+#if DEBUG
+                Console.WriteLine($"[DEBUG][CORE] Current working dir :{Directory.GetCurrentDirectory()}");
+                Console.WriteLine($"[DEBUG][CORE] Current AppDomain BaseDirectory :{AppDomain.CurrentDomain.BaseDirectory}");
+#endif
                 _guildBotsDict = new Dictionary<ulong, GuildBot>();
 
                 _client = new DiscordSocketClient();
                 _client.Log += Log;
-                _client.MessageReceived += MessageReceived;
 
                 await LoadCoreConfig();
 
@@ -59,7 +63,11 @@ namespace CozyBot
                 _client.Ready += 
                     () => { return Task.Run(ConfigGuilds); };
 
-                SetConsoleCtrlHandler(OnCtrlEvent, true);
+                Console.CancelKeyPress += (o, e) => OnCtrlEvent(CtrlType.CTRL_C_EVENT);
+
+                _client.MessageReceived += MessageReceived;
+
+                //SetConsoleCtrlHandler(OnCtrlEvent, true);
 
                 _mre.WaitOne();
             }
@@ -81,6 +89,7 @@ namespace CozyBot
 
         private async Task LoadCoreConfig()
         {
+            _appBaseDirectory = AppDomain.CurrentDomain.BaseDirectory;
             await LoadConfig();
         }
 
@@ -93,17 +102,26 @@ namespace CozyBot
             foreach (var guild in guilds)
             {
                 ulong guildID = guild.Id;
-                string guildPath = guildID.ToString() + @"\";
-                string guildConfigPath = guildPath + "config.xml";
+                string guildPath = Path.Combine(_appBaseDirectory, guildID.ToString());
+                string guildConfigPath = Path.Combine(guildPath, "config.xml");
                 await Task.Run(
                     () =>
                     {
+#if DEBUG
+                        Console.WriteLine($"[DEBUG][CORE] guildPath:{guildPath}");
+#endif
                         if (!Directory.Exists(guildPath))
                         {
+#if DEBUG
+                            Console.WriteLine($"[DEBUG][CORE] Creating guildPath:{guildPath}");
+#endif
                             Directory.CreateDirectory(guildPath);
                         }
                         if (!File.Exists(guildConfigPath))
                         {
+#if DEBUG
+                            Console.WriteLine($"[DEBUG][CORE] Creating guild config:{guildConfigPath}");
+#endif
                             GetDefaultGuildConfig().Save(guildConfigPath);
                         }
                     }
@@ -152,9 +170,12 @@ namespace CozyBot
             await Task.Run(
                 () =>
                 {
-                    if (File.Exists(_configPath))
+#if DEBUG
+                    Console.WriteLine($"[DEBUG][CORE] Load Config Path :{Path.Combine(_appBaseDirectory, _configFileName)}");
+#endif
+                    if (File.Exists(Path.Combine(_appBaseDirectory, _configFileName)))
                     {
-                        using (var stream = File.Open(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        using (var stream = File.Open(Path.Combine(_appBaseDirectory, _configFileName), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                         {
                             _config = XDocument.Load(stream);
                         }
@@ -213,7 +234,8 @@ namespace CozyBot
                 await Task.Run(
                     () =>
                     {
-                        _guildBotsDict[id].Dispatch(msg);
+                        if (_guildBotsDict.TryGetValue(id, out var bot))
+                            bot.Dispatch(msg);
                     }
                 );
             }

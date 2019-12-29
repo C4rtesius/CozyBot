@@ -41,7 +41,7 @@ namespace CozyBot
         /// <summary>
         /// Module working folder.
         /// </summary>
-        private static string _moduleFolder = @"userimg\";
+        private static string _moduleFolder = @"userimg";
 
         /// <summary>
         /// String for citation usage count in XML.
@@ -104,7 +104,7 @@ namespace CozyBot
             {
                 if (_moduleConfigFilePath == String.Empty)
                 {
-                    _moduleConfigFilePath = _guildPath + _configFileName;
+                    _moduleConfigFilePath = Path.Combine(_guildPath, _configFileName);
                 }
                 return _moduleConfigFilePath;
             }
@@ -120,9 +120,9 @@ namespace CozyBot
         public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
             : base(configEl, adminIds, clientId, workingPath)
         {
-            if (!Directory.Exists(_guildPath + _moduleFolder))
+            if (!Directory.Exists(Path.Combine(_guildPath, _moduleFolder)))
             {
-                Directory.CreateDirectory(_guildPath + _moduleFolder);
+                Directory.CreateDirectory(Path.Combine(_guildPath, _moduleFolder));
             }
         }
 
@@ -150,7 +150,7 @@ namespace CozyBot
 
                 try
                 {
-                    await SendFileTask(msg, _guildPath + _moduleFolder + imgFileName);
+                    await SendFileTask(msg, Path.Combine(_guildPath, _moduleFolder, imgFileName));
                 }
                 catch
                 {
@@ -338,7 +338,7 @@ namespace CozyBot
                                 newItemFileName
                             );
 
-                        string filepath = _guildPath + _moduleFolder + newItemFileName;
+                        string filepath = Path.Combine(_guildPath, _moduleFolder, newItemFileName);
 
                         await DownloadFile(att, msg.Channel, filepath);
                         break;
@@ -681,7 +681,7 @@ namespace CozyBot
                 try
                 {
                     await Task.Run(() => File.Delete(
-                        _guildPath + _moduleFolder + delKVP.Value.Value));
+                        Path.Combine(_guildPath, _moduleFolder, delKVP.Value.Value)));
                 }
                 catch
                 {

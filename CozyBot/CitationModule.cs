@@ -41,7 +41,7 @@ namespace CozyBot
         /// <summary>
         /// Module working folder.
         /// </summary>
-        private static string _moduleFolder = @"usercite\";
+        private static string _moduleFolder = @"usercite";
 
         /// <summary>
         /// String for citation usage count in XML.
@@ -93,7 +93,7 @@ namespace CozyBot
         /// </summary>
         public override string ModuleConfigFilePath
             => (_moduleConfigFilePath == String.Empty) 
-              ? _moduleConfigFilePath = _guildPath + _configFileName 
+              ? _moduleConfigFilePath = Path.Combine(_guildPath, _configFileName) 
               : _moduleConfigFilePath;
 
         /// <summary>
@@ -106,9 +106,9 @@ namespace CozyBot
         public CitationModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
             : base (configEl, adminIds, clientId, workingPath)
         {
-            if (!Directory.Exists(_guildPath + _moduleFolder))
+            if (!Directory.Exists(Path.Combine(_guildPath, _moduleFolder)))
             {
-                Directory.CreateDirectory(_guildPath + _moduleFolder);
+                Directory.CreateDirectory(Path.Combine(_guildPath, _moduleFolder));
             }
         }
 
@@ -142,7 +142,7 @@ namespace CozyBot
                 string citation = String.Empty;
                 try
                 {
-                    citation = File.ReadAllText(_guildPath + _moduleFolder + citationFileName);
+                    citation = File.ReadAllText(Path.Combine(_guildPath, _moduleFolder, citationFileName));
                 }
                 catch
                 {
@@ -268,7 +268,7 @@ namespace CozyBot
 
             try
             {
-                File.WriteAllText(_guildPath + _moduleFolder + newItemFileName, regexMatch.Groups["content"].Value);
+                File.WriteAllText(Path.Combine(_guildPath, _moduleFolder, newItemFileName), regexMatch.Groups["content"].Value);
             }
             catch //(Exception ex)
             {
@@ -464,7 +464,7 @@ namespace CozyBot
 
                 try
                 {
-                    citation = File.ReadAllText(_guildPath + _moduleFolder + citationFileName);
+                    citation = File.ReadAllText(Path.Combine(_guildPath, _moduleFolder, citationFileName));
                 }
                 catch
                 {
@@ -610,7 +610,7 @@ namespace CozyBot
                 try
                 {
                     await Task.Run(() => File.Delete(
-                        _guildPath + _moduleFolder + delKVP.Value.Value));
+                        Path.Combine(_guildPath, _moduleFolder, delKVP.Value.Value)));
                 }
                 catch
                 {
