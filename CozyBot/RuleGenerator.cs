@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Text.RegularExpressions;
 
 using Discord;
 using Discord.WebSocket;
@@ -9,31 +9,25 @@ namespace CozyBot
 {
     public static class RuleGenerator
     {
-        private static Rule _hasImage = null;
-
-        private static Predicate<Attachment> _isImage = null;
+        public static Rule HasImage { get; private set; }
+        public static Predicate<Attachment> IsImage { get; private set; }
 
         static RuleGenerator()
         {
-            _hasImage = new Rule(
+            HasImage = new Rule(
                 (msg) =>
                 {
                     var atts = msg.Attachments;
                     if (atts.Count > 0)
-                    {
                         foreach (var att in atts)
-                        {
-                            if (_isImage(att))
-                            {
+                            if (IsImage(att))
                                 return true;
-                            }
-                        }
-                    }
+
                     return false;
                 }
             );
 
-            _isImage =
+            IsImage =
                 (att) =>
                 {
                     string filename = att.Filename.ToLower();
@@ -52,107 +46,62 @@ namespace CozyBot
                 };
         }
 
-        public static Rule HasImage
-        {
-            get
-            {
-                return _hasImage;
-            }
-        }
-
-        public static Predicate<Attachment> IsImage
-        {
-            get
-            {
-                return _isImage;
-            }
-        }
-
         public static Rule TextIdentity(string text)
-        {
-            return new Rule(
-                (msg) =>
-                {
-                    return text == msg.Content;
-                }
-            );
-        }
+            => new Rule((msg) => text == msg.Content);
 
         public static Rule PrefixatedCommand(string prefix, string cmdName)
-        {
-            return new Rule(
+            //=> new Rule((msg) => ((Func<string, string, bool>)((str, prfx) => (str.CompareTo(prfx) == 0) || str.StartsWith(prfx)))(msg.Content.Trim(), $"{prefix}{cmdName}"));
+            => new Rule(
                 (msg) =>
                 {
-                    string text = msg.Content;
-                    if (text.StartsWith(prefix))
-                    {
-                        // TODO : rewrite using regex
-                        string deprefixed = text.Remove(0, prefix.Length);
-                        string[] words = deprefixed.Split(" ");
-                        if (String.Compare(cmdName, words[0]) == 0)
-                        {
-                            return true;
-                        }
-                    }
+                    if (!msg.Content.StartsWith($"{prefix}{cmdName}"))
+                        return false;
+                    //msg.Content.Split(" ")[0].CompareTo($"{prefix}{cmdName}") == 0;
                     return false;
                 }
             );
-        }
+        //string text = msg.Content;
+        //if (text.StartsWith(prefix))
+        //{
+        //    string deprefixed = text.Remove(0, prefix.Length);
+        //    string[] words = deprefixed.Split(" ");
+        //    if (String.Compare(cmdName, words[0]) == 0)
+        //    {
+        //        return true;
+        //    }
+        //}
+        //return false;
 
         public static Rule TextTriggerSingle(string trigger)
-        {
-            return new Rule(
-                (msg) =>
-                {
-                    return msg.Content.Contains(trigger);
-                }
-            );
-        }
+            => new Rule((msg) => msg.Content.Contains(trigger));
 
         public static Rule TextTriggerList(List<string> triggerList)
-        {
-            return new Rule(
+            => new Rule(
                 (msg) =>
                 {
                     foreach (var trigger in triggerList)
-                    {
                         if (msg.Content.Contains(trigger))
-                        {
                             return true;
-                        }
-                    }
+                    
                     return false;
                 }
             );
-        }
 
         public static Rule UserByID(ulong id)
-        {
-            return new Rule(
-                (msg) =>
-                {
-                    return id == msg.Author.Id;
-                }
-            );
-        }
+            => new Rule((msg) => id == msg.Author.Id);
 
         public static Rule RoleByID(ulong id)
         {
             return new Rule(
                 (msg) =>
                 {
-                    var user = msg.Author as SocketGuildUser;
-                    if (user == null)
-                    {
+                    if (!(msg.Author is SocketGuildUser user))
                         return false;
-                    }
+                    
                     foreach (var role in user.Roles)
-                    {
                         if (role.Id == id)
-                        {
                             return true;
-                        }
-                    }
+                    
                     return false;
                 }
             );
@@ -163,9 +112,7 @@ namespace CozyBot
             Rule resultRule = Rule.FalseRule;
 
             foreach (var roleId in roleIds)
-            {
-                resultRule = resultRule | RoleByID(roleId);
-            }
+                resultRule |= RoleByID(roleId);
 
             return resultRule;
         }
