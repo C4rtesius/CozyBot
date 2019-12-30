@@ -209,6 +209,12 @@ namespace CozyBot
                     _modulesDict.Add(pxlsModule.StringID, pxlsModule);
                     //pxlsModule.GuildBotConfigChanged +=
                 }
+                if (modulesEl.Element("music") != null)
+                {
+                    MusicModule musicModule = new MusicModule(modulesEl, _adminIds, _guild, _guildPath);
+                    _modulesDict.Add(musicModule.StringID, musicModule);
+                    //pxlsModule.GuildBotConfigChanged +=
+                }
             }
         }
 
@@ -255,8 +261,7 @@ namespace CozyBot
                        _config.Save(_configPath);
                     }
                 }
-
-            );
+            ).ConfigureAwait(false);
         }
 
         private async void ArchiveModule_ConfigChanged(object sender, ConfigChangedArgs args)

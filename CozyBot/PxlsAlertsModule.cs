@@ -281,7 +281,7 @@ namespace CozyBot
             else
                 template[0, 0] = new Rgba32(template[0, 0].R, template[0, 0].G, template[0, 0].B, (template[0, 0].A > 128) ? 255 : 0);
 
-            var img = Detemplatize(template, symbolSize, canvasData.Palette.Values);
+            using var img = Detemplatize(template, symbolSize, canvasData.Palette.Values);
             
             string pngImagePath = Path.Combine(_modulePath, $"{output}.png");
             try
