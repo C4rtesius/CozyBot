@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Text.Json.Serialization;
 
 using Discord;
 using Discord.WebSocket;
@@ -25,13 +26,19 @@ namespace CozyBot
         private static string _moduleXmlName => "pxls-alerts";
         private static string _moduleFolder => @"pxls-alerts";
 
+        private static string _configFileName = "PxlsAlertsModuleConfig.json";
+
+        private string _moduleConfigFilePath => Path.Combine(_guildPath, _configFileName);
+
+        private PxlsAlertsModuleConfig _moduleConfig;
+
         private SocketGuild _guild;
 
         protected XElement _configEl;
         protected List<ulong> _adminIds;
         protected bool _isActive;
         protected List<IBotCommand> _useCommands = new List<IBotCommand>();
-        //protected event ConfigChanged _configChanged;
+        protected event ConfigChanged _configChanged;
         protected static string _defaultPrefix = "p!";
         protected string _guildPath;
         protected string _prefix;
@@ -58,14 +65,14 @@ namespace CozyBot
             {
                 if (value != null)
                 {
-                    //_configChanged += value;
+                    _configChanged += value;
                 }
             }
             remove
             {
                 if (value != null)
                 {
-                    //_configChanged -= value;
+                    _configChanged -= value;
                 }
             }
         }
@@ -136,11 +143,51 @@ namespace CozyBot
 
             _prefix = prefix;
 
+            if (!File.Exists(_moduleConfigFilePath))
+            {
+                CreateDefaultConfig();
+            }
+
+            _moduleConfig = LoadConfig(_moduleConfigFilePath);
+
             if (_isActive)
                 GenerateUseCommands();
             else
                 _useCommands = new List<IBotCommand>();
         }
+
+        private PxlsAlertsModuleConfig LoadConfig(string filePath)
+        { 
+            try
+            {
+                var data = File.ReadAllBytes(filePath);
+                return JsonSerializer.Deserialize<PxlsAlertsModuleConfig>(data);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][PXLS] Catched :{ex.Message}");
+                Console.WriteLine($"[EXCEPT][PXLS] Stack   :{ex.StackTrace}");
+                throw;
+            }
+        }
+
+        private void CreateDefaultConfig()
+        {
+            var cfg = new PxlsAlertsModuleConfig() { Palettes = new List<Palette>(), Templates = new List<Template>() };
+            var o = new JsonSerializerOptions() { WriteIndented = true };
+            var data = JsonSerializer.SerializeToUtf8Bytes<PxlsAlertsModuleConfig>(cfg, o);
+            try
+            {
+                File.WriteAllBytes(_moduleConfigFilePath, data);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][PXLS] Catched :{ex.Message}");
+                Console.WriteLine($"[EXCEPT][PXLS] Stack   :{ex.StackTrace}");
+                throw;
+            }
+        }
+        
 
         public void Reconfigure(XElement configEl)
         {
@@ -161,7 +208,204 @@ namespace CozyBot
                 )
             );
 
+            list.Add(
+                new BotCommand(
+                    StringID + "-palette",
+                    RuleGenerator.PrefixatedCommand(_prefix, "palette"),
+                    PaletteCmd
+                )
+            );
+
             _useCommands = list;
+        }
+
+        private async Task PaletteCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            if (words.Length == 1)
+            {
+                return;
+            }
+
+            switch (words[1])
+            {
+                case "list":
+                    await PaletteListCmd(msg);
+                    return;
+                case "add" when words.Length > 2:
+                    await PaletteAddCmd(msg);
+                    break;
+                case "get" when words.Length > 2:
+                    await PaletteGetCmd(msg);
+                    break;
+                case "del" when words.Length == 3:
+                    await PaletteDelCmd(msg);
+                    break;
+                default:
+                    return;
+            }
+        }
+        private async Task PaletteDelCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var q = _moduleConfig.Palettes.Where(p => p.Name == words[2]);
+            if (q.Any())
+            {
+                if (_moduleConfig.Palettes.Remove(q.First()))
+                {
+                    await SaveConfig();
+                    await msg.Channel.SendMessageAsync($"Palette {words[2]} deleted.");
+                }
+            }
+            else
+                return;
+        }
+
+        private async Task PaletteGetCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var name = words[2];
+            var q = _moduleConfig.Palettes.Where(p => p.Name == name);
+            if (q.Any())
+            {
+                if (words.Length > 3)
+                {
+
+                }
+                else
+                {
+                    var p = q.First();
+                    string output = @"```; pxls.space palette file for Paint.NET " + Environment.NewLine;
+                    List<string> outputList = new List<string>();
+                    foreach (var c in p.Colours)
+                    {
+                        outputList.Add($"FF{c.Red:X2}{c.Green:X2}{c.Blue:X2};");
+                    }
+
+                    foreach (var str in outputList)
+                    {
+                        if (output.Length + str.Length > 1950)
+                        {
+                            output += "```";
+                            await msg.Channel.SendMessageAsync(output);
+                            output = "```";
+                        }
+                        output += str + Environment.NewLine;
+                    }
+                    output += "```";
+                    await msg.Channel.SendMessageAsync(output);
+                }
+            }
+            else
+                return;
+        }
+
+        private async Task PaletteAddCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            if (msg.Attachments.Count == 1)
+            {
+                try
+                {
+                    string name = words[2];
+                    if (_moduleConfig.Palettes.Where(p => p.Name == name).Any())
+                    {
+                        await msg.Channel.SendMessageAsync("Palette with this name already exists.");
+                        return;
+                    }
+                    var response = await _hc.GetAsync(msg.Attachments.First().Url);
+                    var dataStr = await response.Content.ReadAsStringAsync();
+                    Colour[] colours = null;
+                    if (dataStr.Contains("Paint.NET"))
+                    {
+                        colours = ParsePaintNETFile(dataStr);
+                    }
+                    else
+                    {
+                        // TODO : other formats
+                    }
+
+                    if (colours == null)
+                        return;
+                    var palette = new Palette()
+                    {
+                        Id = _moduleConfig.Palettes.Select(p => p.Id).DefaultIfEmpty(0).Max() + 1,
+                        Name = name,
+                        Colours = colours
+                    };
+
+                    _moduleConfig.Palettes.Add(palette);
+
+                    await SaveConfig();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EXCEPT][PXLS] Catched :{ex.Message}");
+                    Console.WriteLine($"[EXCEPT][PXLS] Stack   :{ex.StackTrace}");
+                    throw;
+                }
+            }
+            else if (msg.Attachments.Count == 0)
+            { }
+            else
+                return;
+        }
+
+        private async Task SaveConfig()
+        {
+            try
+            {
+                var bytes = JsonSerializer.SerializeToUtf8Bytes<PxlsAlertsModuleConfig>(_moduleConfig, new JsonSerializerOptions() { WriteIndented = true });
+                await File.WriteAllBytesAsync(_moduleConfigFilePath, bytes);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][PXLS] Catched :{ex.Message}");
+                Console.WriteLine($"[EXCEPT][PXLS] Stack   :{ex.StackTrace}");
+                throw;
+            }
+        }
+
+        private Colour[] ParsePaintNETFile(string data)
+        {
+            Regex colorRegex = new Regex("FF(?<r>[0-9a-fA-F]{2})(?<g>[0-9a-fA-F]{2})(?<b>[0-9a-fA-F]{2})", RegexOptions.Compiled);
+            var matches = colorRegex.Matches(data);
+            byte id = 0;
+            Colour[] colours = new Colour[matches.Count];
+
+            foreach (Match match in matches)
+            {
+                if (byte.TryParse(match.Groups["r"].Value, NumberStyles.HexNumber, null, out var r))
+                    if (byte.TryParse(match.Groups["g"].Value, NumberStyles.HexNumber, null, out var g))
+                        if (byte.TryParse(match.Groups["b"].Value, NumberStyles.HexNumber, null, out var b))
+                            colours[id++] = new Colour() { Red = r, Green = g, Blue = b };
+            }
+
+            return colours;
+        }
+
+        private async Task PaletteListCmd(SocketMessage msg)
+        {
+            string output = String.Empty;
+            List<string> outputList = new List<string>();
+            foreach (var palette in _moduleConfig.Palettes)
+            {
+                outputList.Add($"`Palette id:{palette.Id,5}   name:{palette.Name,20}  colours: {palette.Colours.Length}`");
+            }
+            
+            foreach (var line in outputList)
+            {
+                if (output.Length + line.Length > 1950)
+                {
+                    await msg.Channel.SendMessageAsync(output);
+                    output = String.Empty;
+                }
+
+                output += line + Environment.NewLine;
+            }
+
+            if (!String.IsNullOrEmpty(output) && !String.IsNullOrEmpty(output))
+                await msg.Channel.SendMessageAsync(output);
         }
 
         private async Task StatusCmd(SocketMessage msg)
@@ -171,6 +415,7 @@ namespace CozyBot
 #endif
             string[] words = msg.Content.Split(" ");
             string _inputUri = words[1];
+
 
 #if DEBUG
             Console.WriteLine($"[DEBUG][PXLS-ALERTS] words[1] :{words[1]}");
@@ -643,4 +888,49 @@ namespace CozyBot
             return refColour;
         }
     }
+
+    public struct Palette
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+        [JsonPropertyName("colours")]
+        public Colour[] Colours { get; set; }
+    }
+    public struct Colour
+    {
+        [JsonPropertyName("r")]
+        public byte Red { get; set; }
+        [JsonPropertyName("g")]
+        public byte Green { get; set; }
+        [JsonPropertyName("b")]
+        public byte Blue { get; set; }
+    }
+
+    public struct Template
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+        [JsonPropertyName("srcurl")]
+        public string SourceUrl { get; set; }
+        [JsonPropertyName("url")]
+        public string Url { get; set; }
+        [JsonPropertyName("paletteid")]
+        public int PaletteId { get; set; }
+    }
+
+    public struct PxlsAlertsModuleConfig
+    { 
+        [JsonPropertyName("palettes")]
+        public List<Palette> Palettes { get; set; }
+        [JsonPropertyName("templates")]
+        public List<Template> Templates { get; set; }
+
+        [JsonExtensionData]
+        public Dictionary<string, object> ExtensionData { get; set; }
+    }
+
 }
