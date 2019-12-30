@@ -54,10 +54,12 @@ namespace CozyBot
             => new Rule(
                 (msg) =>
                 {
-                    if (!msg.Content.StartsWith($"{prefix}{cmdName}"))
-                        return false;
+                    // TODO : profile different variants and find optimal
+
+                    if (msg.Content.Trim().Equals($"{prefix}{cmdName}") || msg.Content.StartsWith($"{prefix}{cmdName} "))
+                        return true;
                     //msg.Content.Split(" ")[0].CompareTo($"{prefix}{cmdName}") == 0;
-                    return true;
+                    return false;
                 }
             );
         //string text = msg.Content;
