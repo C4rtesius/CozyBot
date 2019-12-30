@@ -57,7 +57,7 @@ namespace CozyBot
                     if (!msg.Content.StartsWith($"{prefix}{cmdName}"))
                         return false;
                     //msg.Content.Split(" ")[0].CompareTo($"{prefix}{cmdName}") == 0;
-                    return false;
+                    return true;
                 }
             );
         //string text = msg.Content;

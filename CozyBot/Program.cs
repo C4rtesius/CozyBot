@@ -63,7 +63,7 @@ namespace CozyBot
                 _client.Ready += 
                     () => { return Task.Run(ConfigGuilds); };
 
-                Console.CancelKeyPress += (o, e) => OnCtrlEvent(CtrlType.CTRL_C_EVENT);
+                AppDomain.CurrentDomain.ProcessExit += (o, e) => OnCtrlEvent(CtrlType.CTRL_C_EVENT);
 
                 _client.MessageReceived += MessageReceived;
 
@@ -83,6 +83,9 @@ namespace CozyBot
 
         private void OnCtrlEvent(CtrlType type)
         {
+#if DEBUG
+            Console.WriteLine("[DEBUG][CORE] ProcessExit triggered.");
+#endif
             _ctrlEventHandler.Invoke(type);
             _mre.Set();
         }
@@ -228,14 +231,27 @@ namespace CozyBot
 
         private async Task MessageReceived(SocketMessage msg)
         {
+#if DEBUG
+            //Console.WriteLine("[DEBUG][CORE] MessageReceived triggered.");
+#endif
             if (msg.Channel is SocketGuildChannel scg)
             {
                 ulong id = scg.Guild.Id;
                 await Task.Run(
                     () =>
                     {
+#if DEBUG
+                        //Console.WriteLine($"[DEBUG][CORE] MessageReceived guild id :{id}.");
+#endif
                         if (_guildBotsDict.TryGetValue(id, out var bot))
+#if DEBUG
+                        {
+                            //Console.WriteLine($"[DEBUG][CORE] MessageReceived guildBot : {bot}.");
+#endif
                             bot.Dispatch(msg);
+#if DEBUG
+                        }
+#endif
                     }
                 );
             }

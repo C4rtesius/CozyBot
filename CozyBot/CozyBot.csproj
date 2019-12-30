@@ -32,6 +32,7 @@
     <Compile Remove="ILoggableModule.cs" />
     <Compile Remove="LoggingModule.cs" />
     <Compile Remove="ModerationModule.cs" />
+    <Compile Remove="ModuleLoggedArgs.cs" />
     <Compile Remove="TimedPostModule.cs" />
   </ItemGroup>
 
