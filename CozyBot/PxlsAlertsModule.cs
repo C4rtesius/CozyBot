@@ -409,6 +409,9 @@ namespace CozyBot
             using var img = Detemplatize(template, symbolSize, pd);
 
             string pngImagePath = $"{file}";//.png";
+            if (!Path.HasExtension(file))
+                pngImagePath += ".png";
+
             try
             {
                 using (var fs = new FileStream(pngImagePath, FileMode.Create, FileAccess.ReadWrite))
@@ -1688,7 +1691,7 @@ namespace CozyBot
                 }
             }
 
-            if (jsonRoot.TryGetProperty("width", out var heightEl))
+            if (jsonRoot.TryGetProperty("height", out var heightEl))
             {
                 if (heightEl.TryGetInt32(out int heightVal))
                 {
