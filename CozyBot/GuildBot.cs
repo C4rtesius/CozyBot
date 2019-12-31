@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text;
 using System.Xml.Linq;
@@ -266,17 +266,17 @@ namespace CozyBot
 
         private async void ArchiveModule_ConfigChanged(object sender, ConfigChangedArgs args)
         {
-            await SaveConfig();
+            await SaveConfig().ConfigureAwait(false);
         }
 
         private async void ImageModule_ConfigChanged(object sender, ConfigChangedArgs args)
         {
-            await SaveConfig();
+            await SaveConfig().ConfigureAwait(false);
         }
 
         private async void CitationModule_ConfigChanged(object sender, ConfigChangedArgs args)
         {
-            await SaveConfig();
+            await SaveConfig().ConfigureAwait(false);
         }
 
         private async Task BinaryChoiceCommand(SocketMessage msg)
@@ -292,12 +292,12 @@ namespace CozyBot
             {
                 reply += "Ні " + EmojiCodes.Pizdec;
             }
-            await msg.Channel.SendMessageAsync(reply);
+            await msg.Channel.SendMessageAsync(reply).ConfigureAwait(false);
         }
 
         private async Task Magic8BallCommand(SocketMessage msg)
         {
-            await msg.Channel.SendMessageAsync(_magic8BallResponses[new Random(DateTime.Now.Millisecond).Next(_magic8BallResponses.Length)]);
+            await msg.Channel.SendMessageAsync(_magic8BallResponses[new Random(DateTime.Now.Millisecond).Next(_magic8BallResponses.Length)]).ConfigureAwait(false);
         }
 
         private async Task RollCommand(SocketMessage msg)
@@ -381,12 +381,12 @@ namespace CozyBot
                 result += (ulong)rng.Next(1, size);
             }
 
-            await msg.Channel.SendMessageAsync("Ви заролили : " + result + " " + EmojiCodes.Pizdec);
+            await msg.Channel.SendMessageAsync("Ви заролили : " + result + " " + EmojiCodes.Pizdec).ConfigureAwait(false);
         }
 
         private async Task PingCommand(SocketMessage msg)
         {
-            await msg.Channel.SendMessageAsync("Pong!");
+            await msg.Channel.SendMessageAsync("Pong!").ConfigureAwait(false);
         }
 
         private async Task CtrlCommand(SocketMessage msg)
@@ -402,12 +402,12 @@ namespace CozyBot
             switch (words[1])
             {
                 case "off":
-                    await SaveConfig();
-                    await msg.Channel.SendMessageAsync("Лягаю спати " + EmojiCodes.Pepe);
+                    await SaveConfig().ConfigureAwait(false);
+                    await msg.Channel.SendMessageAsync("Лягаю спати " + EmojiCodes.Pepe).ConfigureAwait(false);
                     //_mre.Set();
                     break;
                 case "modules":
-                    await ModulesCommand(words, msg);
+                    await ModulesCommand(words, msg).ConfigureAwait(false);
                     break;
                 default:
                     break;
@@ -426,7 +426,7 @@ namespace CozyBot
                 case "list":
                     if (_modulesDict.Count == 0)
                     {
-                        await msg.Channel.SendMessageAsync("Не підключено жодного модуля.");
+                        await msg.Channel.SendMessageAsync("Не підключено жодного модуля.").ConfigureAwait(false);
                         return;
                     }
                     string output = @"Список підключених модулів :" + Environment.NewLine + @"```";
@@ -436,21 +436,21 @@ namespace CozyBot
                     }
                     output += @"```";
 
-                    await msg.Channel.SendMessageAsync(output);
+                    await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
                     break;
                 case "on":
                     if (words.Length < 4)
                     {
                         return;
                     }
-                    await ChangeModulesState(words, true, msg);
+                    await ChangeModulesState(words, true, msg).ConfigureAwait(false);
                     break;
                 case "off":
                     if (words.Length < 4)
                     {
                         return;
                     }
-                    await ChangeModulesState(words, false, msg);
+                    await ChangeModulesState(words, false, msg).ConfigureAwait(false);
                     break;
                 default:
                     break;
@@ -502,16 +502,16 @@ namespace CozyBot
                     modulesString += module + " ";
                 }
 
-                await SaveConfig();
+                await SaveConfig().ConfigureAwait(false);
 
                 string output = @"Наступні модулі було " + (newState ? @"увімкнено : " : @"вимкнено : ");
                 output += modulesString + " " + EmojiCodes.Picardia;
 
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
             }
             else
             {
-                await msg.Channel.SendMessageAsync(@"Нічого не було змінено " + EmojiCodes.Thonk);
+                await msg.Channel.SendMessageAsync(@"Нічого не було змінено " + EmojiCodes.Thonk).ConfigureAwait(false);
             }
         }
 

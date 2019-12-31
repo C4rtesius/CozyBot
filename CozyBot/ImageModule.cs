@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Xml.Linq;
 using System.Net.Http;
@@ -132,7 +132,7 @@ namespace CozyBot
             {
                 try
                 {
-                    await msg.DeleteAsync();
+                    await msg.DeleteAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -150,7 +150,7 @@ namespace CozyBot
 
                 try
                 {
-                    await SendFileTask(msg, Path.Combine(_guildPath, _moduleFolder, imgFileName));
+                    await SendFileTask(msg, Path.Combine(_guildPath, _moduleFolder, imgFileName)).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -179,7 +179,7 @@ namespace CozyBot
                     );
                 }
 
-                await ModuleConfigChanged();
+                await ModuleConfigChanged().ConfigureAwait(false);
                 Reconfigure(_configEl);
             };
             // old code
@@ -196,7 +196,7 @@ namespace CozyBot
         {
             try
             {
-                await msg.Channel.SendFileAsync(filePath);
+                await msg.Channel.SendFileAsync(filePath).ConfigureAwait(false);
             }
             catch
             {
@@ -283,7 +283,7 @@ namespace CozyBot
         {
             if (File.Exists(filepath))
             {
-                await sc.SendMessageAsync("Пікча з такою назвою вже є " + EmojiCodes.Tomas);
+                await sc.SendMessageAsync("Пікча з такою назвою вже є " + EmojiCodes.Tomas).ConfigureAwait(false);
                 return;
             }
 
@@ -292,11 +292,11 @@ namespace CozyBot
                 using (FileStream fs = new FileStream(filepath, FileMode.Create, FileAccess.Write))
                 {
                     var response = await hc.GetAsync(att.Url);
-                    await response.Content.CopyToAsync(fs);
+                    await response.Content.CopyToAsync(fs).ConfigureAwait(false);
                 }
             }
 
-            await sc.SendMessageAsync("Зберіг пікчу " + EmojiCodes.DankPepe);
+            await sc.SendMessageAsync("Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
         }
 
         protected override async Task AddCommand(SocketMessage msg)
@@ -340,7 +340,7 @@ namespace CozyBot
 
                         string filepath = Path.Combine(_guildPath, _moduleFolder, newItemFileName);
 
-                        await DownloadFile(att, msg.Channel, filepath);
+                        await DownloadFile(att, msg.Channel, filepath).ConfigureAwait(false);
                         break;
                     }
                 }
@@ -382,7 +382,7 @@ namespace CozyBot
 
             try
             {
-                await ModuleConfigChanged();
+                await ModuleConfigChanged().ConfigureAwait(false);
             }
             catch
             {
@@ -393,7 +393,7 @@ namespace CozyBot
 
             try
             {
-                await msg.DeleteAsync();
+                await msg.DeleteAsync().ConfigureAwait(false);
             }
             catch
             {
@@ -479,7 +479,7 @@ namespace CozyBot
             // TODO : fix a bug with wrong `list` command output
             try
             {
-                await msg.DeleteAsync();
+                await msg.DeleteAsync().ConfigureAwait(false);
             }
             catch
             {
@@ -538,14 +538,14 @@ namespace CozyBot
 
             foreach (var outputMsg in outputMsgs)
             {
-                await ch.SendMessageAsync(outputMsg);
+                await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
             }
 
             output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
 
             try
             {
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
             }
             catch
             {
@@ -595,7 +595,7 @@ namespace CozyBot
             {
                 try
                 {
-                    await msg.DeleteAsync();
+                    await msg.DeleteAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -645,11 +645,11 @@ namespace CozyBot
 
                 var dm = await msg.Author.GetOrCreateDMChannelAsync();
 
-                await dm.SendMessageAsync(String.Empty, false, eb.Build());
+                await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
                 string output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
 
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
             }
         }
 
@@ -692,7 +692,7 @@ namespace CozyBot
             if (imgDeleted.Count > 0)
             {
                 //await RaiseConfigChanged(_configEl);
-                await ModuleConfigChanged();
+                await ModuleConfigChanged().ConfigureAwait(false);
                 Reconfigure(_configEl);
                 //GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
                 string output = @"Видалив наступні пікчі :" + Environment.NewLine + @"```";
@@ -702,11 +702,11 @@ namespace CozyBot
                 }
                 output += "```" + Environment.NewLine + EmojiCodes.Pepe;
 
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
             }
             else
             {
-                await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat);
+                await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat).ConfigureAwait(false);
             }
 
             // old code

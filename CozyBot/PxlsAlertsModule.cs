@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -216,7 +216,862 @@ namespace CozyBot
                 )
             );
 
+            list.Add(
+                new BotCommand(
+                    StringID + "-template",
+                    RuleGenerator.PrefixatedCommand(_prefix, "template"),
+                    TemplateCmd
+                )
+            );
+
+            //list.Add(
+            //    new BotCommand(
+            //        StringID + "-detemplatize",
+            //        RuleGenerator.PrefixatedCommand(_prefix, "detempl"),
+            //        DetemplatizeCmd
+            //    )
+            //);
+
             _useCommands = list;
+        }
+
+        private async Task DetemplatizeCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            if (msg.Attachments.Any())
+            {
+                switch (words.Length)
+                {
+                    case 2:
+                        await DetemplByAttachmentCmd(msg).ConfigureAwait(false);
+                        return;
+                    case 3:
+                        await DetemplByAttachmentAndPaletteCmd(msg).ConfigureAwait(false);
+                        return;
+                    default:
+                        break;
+                }
+            }
+            else if (words.Length > 2 && words.Length < 5)
+            {
+                switch (words.Length)
+                {
+                    case 3:
+                        await DetemplByLinkCmd(msg).ConfigureAwait(false);
+                        return;
+                    case 4:
+                        await DetemplByLinkAndPaletteCmd(msg).ConfigureAwait(false);
+                        return;
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                await msg.Channel.SendMessageAsync("Unrecognized command format.").ConfigureAwait(false);
+            }
+        }
+        private async Task DetemplByAttachmentAndPaletteCmd(SocketMessage msg)
+        {
+            var url = msg.Attachments.First().Url;
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            var paletteName = msg.Content.Split(" ")[2];
+            var q = _moduleConfig.Palettes.Where(p => p.Name == paletteName);
+            
+            List<Rgba32> pd = new List<Rgba32>();
+
+            if (!q.Any())
+            {
+                await msg.Channel.SendMessageAsync("Specified palette not found. Using current pxls.space palette.").ConfigureAwait(false);
+                await DetemplByLinkCmd(msg).ConfigureAwait(false);
+            }
+            else
+            {
+
+                foreach (var c in q.First().Colours)
+                    pd.Add(new Rgba32(c.Red, c.Green, c.Blue));
+            }
+
+            var image = await DetemplHelper(msg, file, pd).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            await msg.Channel.SendFileAsync(image).ConfigureAwait(false);
+
+            File.Delete(file);
+            File.Delete(image);
+        }
+
+        private async Task DetemplByAttachmentCmd(SocketMessage msg)
+        {
+            var url = msg.Attachments.First().Url;
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            CanvasData canvasData;
+
+            try
+            {
+                canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+
+            var image = await DetemplHelper(msg, file, canvasData.Palette.Values).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            await msg.Channel.SendFileAsync(image).ConfigureAwait(false);
+
+            File.Delete(file);
+            File.Delete(image);
+        }
+
+        private async Task DetemplByLinkCmd(SocketMessage msg)
+        {
+            var url = msg.Content.Split(" ")[2];
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            CanvasData canvasData;
+
+            try
+            {
+                canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+
+            var image = await DetemplHelper(msg, file, canvasData.Palette.Values).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            await msg.Channel.SendFileAsync(image).ConfigureAwait(false);
+
+            File.Delete(file);
+            File.Delete(image);
+        }
+
+        private async Task<string> DetemplHelper(SocketMessage msg, string file, IEnumerable<Rgba32> pd)
+        {
+            SixLabors.ImageSharp.Image<Rgba32> template;
+
+            try
+            {
+                template = SixLabors.ImageSharp.Image.Load(file).CloneAs<Rgba32>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return String.Empty;
+            }
+
+            int symbolSize = GetTemplateSymbolSizeFromMetadata(template);
+            if (symbolSize == 0)
+                symbolSize = GetTemplateSymbolSize(template, pd);
+            else
+                template[0, 0] = new Rgba32(template[0, 0].R, template[0, 0].G, template[0, 0].B, (template[0, 0].A > 128) ? 255 : 0);
+
+            using var img = Detemplatize(template, symbolSize, pd);
+
+            string pngImagePath = $"{file}";//.png";
+            try
+            {
+                using (var fs = new FileStream(pngImagePath, FileMode.Create, FileAccess.ReadWrite))
+                    img.SaveAsPng(fs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return String.Empty;
+            }
+
+            return pngImagePath;
+        }
+
+        private async Task<string> GetTemplateFilePathByUrl(string url)
+        {
+            string fileName = String.Empty;
+            if (url.StartsWith(@"https://pxls.space/#"))
+            {
+                var templateRegex = new Regex(_templateRegexPattern);
+                var templateMatch = templateRegex.Match(url);
+                if (!Uri.TryCreate(templateMatch.Groups["uri"].Value, UriKind.RelativeOrAbsolute, out var _))
+#if DEBUG
+                {
+                    Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{templateMatch.Groups["uri"].Value}");
+                    return String.Empty;
+                }
+#else
+                    return;
+#endif
+                url = Uri.UnescapeDataString(templateMatch.Groups["uri"].Value);
+                fileName = templateMatch.Groups["file"].Value;
+            }
+            else
+            {
+                if (!Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var _))
+#if DEBUG
+                {
+                    Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{url}");
+                    return String.Empty;
+                }
+#else
+                    return;
+#endif
+                url = Uri.UnescapeDataString(url);
+                fileName = (new FileInfo(url)).Name;
+            }
+
+            //if (
+            //    String.IsNullOrEmpty((new FileInfo(fileName)).Extension) ||
+            //    String.IsNullOrWhiteSpace((new FileInfo(fileName)).Extension)
+            //)
+            //{
+            //    var extension =
+            //        (String.IsNullOrEmpty((new FileInfo(url)).Extension)
+            //        || String.IsNullOrWhiteSpace((new FileInfo(url)).Extension))
+            //        ? "png"
+            //        : (new FileInfo(url)).Extension;
+            //    fileName += "." + extension;
+            //}
+
+            fileName = Path.Combine(_modulePath, fileName);
+
+            using var response = await _hc.GetAsync(Uri.UnescapeDataString($"{url}"));
+            using var cs = await response.Content.ReadAsStreamAsync();
+            using (var fs = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite))
+                await cs.CopyToAsync(fs).ConfigureAwait(false);
+
+            return fileName;
+        }
+
+        private async Task DetemplByLinkAndPaletteCmd(SocketMessage msg)
+        {
+            var paletteName = msg.Content.Split(" ")[2];
+            var q = _moduleConfig.Palettes.Where(p => p.Name == paletteName);
+            if (!q.Any())
+            {
+                await msg.Channel.SendMessageAsync("Specified palette not found. Using current pxls.space palette.").ConfigureAwait(false);
+                await DetemplByLinkCmd(msg).ConfigureAwait(false);
+                return;
+            }
+
+            List<Rgba32> pd = new List<Rgba32>();
+
+            foreach (var c in q.First().Colours)
+                pd.Add(new Rgba32(c.Red, c.Green, c.Blue));
+
+            var url = msg.Content.Split(" ")[3];
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            var image = await DetemplHelper(msg, file, pd).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+            await msg.Channel.SendFileAsync(image).ConfigureAwait(false);
+
+            File.Delete(file);
+            File.Delete(image);
+        }
+
+        private async Task TemplateCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            if (words.Length == 1)
+            {
+                return;
+            }
+            if (words.Length > 1)
+            {
+                switch (words[1])
+                {
+                    case "list":
+                        await TemplateListCmd(msg).ConfigureAwait(false);
+                        return;
+                    case "add" when words.Length > 3:
+                        await TemplateAddCmd(msg).ConfigureAwait(false);
+                        return;
+                    case "del" when words.Length == 3:
+                        await TemplateDelCmd(msg).ConfigureAwait(false);
+                        return;
+                    case "get":
+                        await TemplateGetCmd(msg).ConfigureAwait(false);
+                        return;
+                    case "detempl":
+                        await DetemplatizeCmd(msg).ConfigureAwait(false);
+                        return;
+                    case "make":
+                        await TemplateMakeCmd(msg).ConfigureAwait(false);
+                        return;
+                    default:
+                        return;
+                }
+            }
+        }
+
+        private async Task TemplateMakeCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            if (msg.Attachments.Any())
+            {
+                switch (words.Length)
+                {
+                    case 2:
+                        await TemplateMakeFromAttachment(msg).ConfigureAwait(false);
+                        return;
+                    case 3:
+                        await TemplateMakeFromAttachmentSymbol(msg).ConfigureAwait(false);
+                        return;
+                    case 4:
+                        await TemplateMakeFromAttachmentSymbolPalette(msg).ConfigureAwait(false);
+                        return;
+                    default:
+                        break;
+                }
+            }
+            else if (words.Length > 2 && words.Length < 6)
+            {
+                switch (words.Length)
+                {
+                    case 3:
+                        await TemplateMakeFromURL(msg).ConfigureAwait(false);
+                        break;
+                    case 4:
+                        await TemplateMakeFromURLSymbol(msg).ConfigureAwait(false);
+                        break;
+                    case 5:
+                        await TemplateMakeFromURLSymbolPalette(msg).ConfigureAwait(false);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else 
+            {
+                await msg.Channel.SendMessageAsync("Unrecognized command format.").ConfigureAwait(false);
+            }
+        }
+
+        private async Task TemplateMakeFromURL(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var url = words[2];
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            IEnumerable<Rgba32> pd;
+
+            var canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+            pd = canvasData.Palette.Values;
+
+            var image = await DetemplHelper(msg, file, pd);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            (string template, int width) = CreateDottedTemplate(image);
+
+            if (String.IsNullOrEmpty(template))
+            {
+                await msg.Channel.SendMessageAsync("Templatization unsuccessful.").ConfigureAwait(false);
+            }
+
+            ulong id = (await msg.Channel.SendFileAsync(template).ConfigureAwait(false)).Id;
+            File.Delete(template);
+            var templateUrl = Uri.EscapeDataString((await msg.Channel.GetMessageAsync(id).ConfigureAwait(false)).Attachments.First().Url);
+            var templateString = $"https://pxls.space/#template={templateUrl}&tw={width}&ox=0&oy=0&x=0&y=0&scale=3&oo=1";
+            await msg.Channel.SendMessageAsync(templateString).ConfigureAwait(false);
+        }
+
+        private async Task TemplateMakeFromURLSymbol(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var symbolType = words[2];
+            var url = words[3];
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            IEnumerable<Rgba32> pd;
+
+            if (symbolType != "dotted")
+            {
+                await msg.Channel.SendMessageAsync("Unsupported symbol type").ConfigureAwait(false);
+                return;
+            }
+
+            var canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+            pd = canvasData.Palette.Values;
+
+            var image = await DetemplHelper(msg, file, pd);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            var template = String.Empty;
+            int width = 0;
+            switch (symbolType)
+            {
+                case "dotted":
+                    (template, width) = CreateDottedTemplate(image);
+                    break;
+                default:
+                    break;
+            }
+
+            if (String.IsNullOrEmpty(template))
+            {
+                await msg.Channel.SendMessageAsync("Templatization unsuccessful.").ConfigureAwait(false);
+            }
+
+            ulong id = (await msg.Channel.SendFileAsync(template).ConfigureAwait(false)).Id;
+            File.Delete(template);
+            var templateUrl = Uri.EscapeDataString((await msg.Channel.GetMessageAsync(id).ConfigureAwait(false)).Attachments.First().Url);
+            var templateString = $"https://pxls.space/#template={templateUrl}&tw={width}&ox=0&oy=0&x=0&y=0&scale=3&oo=1";
+            await msg.Channel.SendMessageAsync(templateString).ConfigureAwait(false);
+        }
+
+        private async Task TemplateMakeFromURLSymbolPalette(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var symbolType = words[2];
+            var paletteName = words[3];
+            var url = words[4];
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            IEnumerable<Rgba32> pd;
+
+            if (symbolType != "dotted")
+            {
+                await msg.Channel.SendMessageAsync("Unsupported symbol type").ConfigureAwait(false);
+                return;
+            }
+
+            var q = _moduleConfig.Palettes.Where(p => p.Name == paletteName);
+            if (!q.Any())
+            {
+                await msg.Channel.SendMessageAsync("Specified palette not found. Using current pxls.space palette.").ConfigureAwait(false);
+                var canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+                pd = canvasData.Palette.Values;
+            }
+            else
+            {
+                var list = new List<Rgba32>();
+                foreach (var c in q.First().Colours)
+                    list.Add(new Rgba32(c.Red, c.Green, c.Blue));
+                pd = list;
+            }
+
+            var image = await DetemplHelper(msg, file, pd);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            var template = String.Empty;
+            int width = 0;
+            switch (symbolType)
+            {
+                case "dotted":
+                    (template, width) = CreateDottedTemplate(image);
+                    break;
+                default:
+                    break;
+            }
+
+            if (String.IsNullOrEmpty(template))
+            {
+                await msg.Channel.SendMessageAsync("Templatization unsuccessful.").ConfigureAwait(false);
+            }
+
+            ulong id = (await msg.Channel.SendFileAsync(template).ConfigureAwait(false)).Id;
+            File.Delete(template);
+            var templateUrl = Uri.EscapeDataString((await msg.Channel.GetMessageAsync(id).ConfigureAwait(false)).Attachments.First().Url);
+            var templateString = $"https://pxls.space/#template={templateUrl}&tw={width}&ox=0&oy=0&x=0&y=0&scale=3&oo=1";
+            await msg.Channel.SendMessageAsync(templateString).ConfigureAwait(false);
+        }
+
+        private async Task TemplateMakeFromAttachment(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var url = msg.Attachments.First().Url;
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            IEnumerable<Rgba32> pd;
+
+            var canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+            pd = canvasData.Palette.Values;
+
+            var image = await DetemplHelper(msg, file, pd);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            (string template, int width) = CreateDottedTemplate(image);
+
+            if (String.IsNullOrEmpty(template))
+            {
+                await msg.Channel.SendMessageAsync("Templatization unsuccessful.").ConfigureAwait(false);
+            }
+
+            ulong id = (await msg.Channel.SendFileAsync(template).ConfigureAwait(false)).Id;
+            File.Delete(template);
+            var templateUrl = Uri.EscapeDataString((await msg.Channel.GetMessageAsync(id).ConfigureAwait(false)).Attachments.First().Url);
+            var templateString = $"https://pxls.space/#template={templateUrl}&tw={width}&ox=0&oy=0&x=0&y=0&scale=3&oo=1";
+            await msg.Channel.SendMessageAsync(templateString).ConfigureAwait(false);
+
+        }
+
+
+        private async Task TemplateMakeFromAttachmentSymbol(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var symbolType = words[2];
+            var url = msg.Attachments.First().Url;
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            IEnumerable<Rgba32> pd;
+
+            if (symbolType != "dotted")
+            {
+                await msg.Channel.SendMessageAsync("Unsupported symbol type").ConfigureAwait(false);
+                return;
+            }
+
+            var canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+            pd = canvasData.Palette.Values;
+
+            var image = await DetemplHelper(msg, file, pd);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            var template = String.Empty;
+            int width = 0;
+            switch (symbolType)
+            {
+                case "dotted":
+                    (template, width) = CreateDottedTemplate(image);
+                    break;
+                default:
+                    break;
+            }
+
+            if (String.IsNullOrEmpty(template))
+            {
+                await msg.Channel.SendMessageAsync("Templatization unsuccessful.").ConfigureAwait(false);
+            }
+
+            ulong id = (await msg.Channel.SendFileAsync(template).ConfigureAwait(false)).Id;
+            File.Delete(template);
+            var templateUrl = Uri.EscapeDataString((await msg.Channel.GetMessageAsync(id).ConfigureAwait(false)).Attachments.First().Url);
+            var templateString = $"https://pxls.space/#template={templateUrl}&tw={width}&ox=0&oy=0&x=0&y=0&scale=3&oo=1";
+            await msg.Channel.SendMessageAsync(templateString).ConfigureAwait(false);
+        }
+
+        private async Task TemplateMakeFromAttachmentSymbolPalette(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var symbolType = words[2];
+            var paletteName = words[3];
+            var url = msg.Attachments.First().Url;
+            var file = await GetTemplateFilePathByUrl(url).ConfigureAwait(false);
+            if (String.IsNullOrEmpty(file))
+            {
+                await msg.Channel.SendMessageAsync("Bad URL.").ConfigureAwait(false);
+                return;
+            }
+
+            IEnumerable<Rgba32> pd;
+
+            if (symbolType != "dotted")
+            {
+                await msg.Channel.SendMessageAsync("Unsupported symbol type").ConfigureAwait(false);
+                return;
+            }
+
+            var q = _moduleConfig.Palettes.Where(p => p.Name == paletteName);
+            if (!q.Any())
+            {
+                await msg.Channel.SendMessageAsync("Specified palette not found. Using current pxls.space palette.").ConfigureAwait(false);
+                var canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl).ConfigureAwait(false);
+                pd = canvasData.Palette.Values;
+            }
+            else
+            {
+                var list = new List<Rgba32>();
+                foreach (var c in q.First().Colours)
+                    list.Add(new Rgba32(c.Red, c.Green, c.Blue));
+                pd = list;
+            }
+
+            var image = await DetemplHelper(msg, file, pd);
+            if (String.IsNullOrEmpty(image))
+            {
+                await msg.Channel.SendMessageAsync("Detemplatization unsuccessful.").ConfigureAwait(false);
+                return;
+            }
+
+            var template = String.Empty;
+            int width = 0;
+            switch (symbolType)
+            {
+                case "dotted":
+                    (template, width) = CreateDottedTemplate(image);
+                    break;
+                default:
+                    break;
+            }
+            
+            if (String.IsNullOrEmpty(template))
+            {
+                await msg.Channel.SendMessageAsync("Templatization unsuccessful.").ConfigureAwait(false);
+            }
+
+            ulong id = (await msg.Channel.SendFileAsync(template).ConfigureAwait(false)).Id;
+            File.Delete(template);
+            var templateUrl = Uri.EscapeDataString((await msg.Channel.GetMessageAsync(id).ConfigureAwait(false)).Attachments.First().Url);
+            var templateString = $"https://pxls.space/#template={templateUrl}&tw={width}&ox=0&oy=0&x=0&y=0&scale=3&oo=1";
+            await msg.Channel.SendMessageAsync(templateString).ConfigureAwait(false);
+        }
+
+        private (string, int) CreateDottedTemplate(string srcFile)
+        {
+            using var src = SixLabors.ImageSharp.Image.Load(srcFile).CloneAs<Rgba32>();
+            using var template = new Image<Rgba32>(src.Width * 3, src.Height * 3);
+
+            for (int i = 0; i < src.Width; i++)
+            {
+                for (int j = 0; j < src.Height; j++)
+                {
+                    template[i * 3 + 1, j * 3 + 1] = src[i, j];
+                }
+            }
+
+            template[0, 0] = new Rgba32(
+                template[0, 0].R,
+                template[0, 0].G,
+                template[0, 0].B,
+                (byte)((src[0, 0].A > 128) ? 255 - 3 : 3));
+
+            string destPath = Path.Combine(_modulePath, Path.GetFileNameWithoutExtension(srcFile) + "-template.png");
+
+            try
+            {
+                using (var fs = new FileStream(destPath, FileMode.Create, FileAccess.ReadWrite))
+                    template.SaveAsPng(fs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][PXLS] Catched :{ex.Message}");
+                Console.WriteLine($"[EXCEPT][PXLS] Stack   :{ex.StackTrace}");
+                destPath = String.Empty;
+            }
+
+            return (destPath, src.Width);
+        }
+
+        private async Task TemplateGetCmd(SocketMessage msg)
+        { 
+            var words = msg.Content.Split(" ");
+            var name = words[2];
+            var q = _moduleConfig.Templates.Where(t => t.Name == name);
+            if (q.Any())
+            {
+                var t = q.First();
+                string output = String.Empty;
+                output += $@"`Template {name} info:`" + Environment.NewLine;
+                output += Environment.NewLine;
+                output += $@"`Id : {t.Id}`" + Environment.NewLine;
+                output += $@"`Name : {t.Name}`" + Environment.NewLine;
+                output += $@"`URL : `{t.Url}" + Environment.NewLine;
+                output += $@"`Image URL : `{t.SourceUrl}" + Environment.NewLine;
+                output += $@"`Added by : {t.AddedBy}`" + Environment.NewLine;
+                // TODO : Implement Palette ID
+                output += $@"`Palette ID : {"Not implemented"}`" + Environment.NewLine;
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+            }
+            else
+            {
+                await msg.Channel.SendMessageAsync("Specified template not found.").ConfigureAwait(false);
+            }
+        }
+        private async Task TemplateDelCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var q = _moduleConfig.Templates.Where(t => t.Name == words[2]);
+            if (q.Any())
+            {
+                if (_moduleConfig.Templates.Remove(q.First()))
+                {
+                    await SaveConfig().ConfigureAwait(false);
+                    await msg.Channel.SendMessageAsync($"Template {words[2]} deleted.").ConfigureAwait(false);
+                }
+            }
+            else
+                return;
+
+        }
+
+        private async Task TemplateAddCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(" ");
+            var name = words[2];
+            var url = words[3];
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS] Template Add Cmd URL :{url}");
+#endif
+            if (!Uri.IsWellFormedUriString(url, UriKind.RelativeOrAbsolute))
+            {
+                msg.Channel.SendMessageAsync("Bad template URL.");
+#if DEBUG
+                Console.WriteLine("[DEBUG][PXLS] URL BAD.");
+#endif
+                return;
+            }
+#if DEBUG
+            Console.WriteLine("[DEBUG][PXLS] URL OK.");
+#endif
+            if (_moduleConfig.Templates.Where(t => t.Name == name).Any())
+            {
+                await msg.Channel.SendMessageAsync("Template with this name already exists.").ConfigureAwait(false);
+                return;
+            }
+
+            var templateRegex = new Regex(_templateRegexPattern);
+            var templateMatch = templateRegex.Match(url);
+
+            if (!Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var _))
+#if DEBUG
+            {
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{url}");
+                return;
+            }
+#else
+                return;
+#endif
+            if (!Uri.TryCreate(templateMatch.Groups["uri"].Value, UriKind.RelativeOrAbsolute, out var _))
+#if DEBUG
+            {
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{templateMatch.Groups["uri"].Value}");
+                return;
+            }
+#else
+                return;
+#endif
+            var template = new Template()
+            {
+                Id = _moduleConfig.Templates.Select(t => t.Id).DefaultIfEmpty(0).Max() + 1,
+                Name = name,
+                Url = url,
+                SourceUrl = Uri.UnescapeDataString(templateMatch.Groups["uri"].Value),
+                AddedBy = $"{msg.Author.Username}#{msg.Author.DiscriminatorValue}"
+                // TODO : Add PaletteId
+                //, PaletteId = ...
+            };
+
+            _moduleConfig.Templates.Add(template);
+
+            await SaveConfig().ConfigureAwait(false);
+            await msg.Channel.SendMessageAsync($"Template {name} added.").ConfigureAwait(false);
+        }
+
+        private async Task TemplateListCmd(SocketMessage msg)
+        {
+            string output = String.Empty;
+            List<string> outputList = new List<string>();
+            foreach (var template in _moduleConfig.Templates)
+            {
+                outputList.Add($"`Template id:{template.Id,3}  name:{template.Name,20}  added by:{template.AddedBy,20}`");
+            }
+
+            foreach (var line in outputList)
+            {
+                if (output.Length + line.Length > 1950)
+                {
+                    await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+                    output = String.Empty;
+                }
+
+                output += line + Environment.NewLine;
+            }
+
+            if (!String.IsNullOrEmpty(output) && !String.IsNullOrEmpty(output))
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
         }
 
         private async Task PaletteCmd(SocketMessage msg)
@@ -230,16 +1085,16 @@ namespace CozyBot
             switch (words[1])
             {
                 case "list":
-                    await PaletteListCmd(msg);
+                    await PaletteListCmd(msg).ConfigureAwait(false);
                     return;
                 case "add" when words.Length > 2:
-                    await PaletteAddCmd(msg);
+                    await PaletteAddCmd(msg).ConfigureAwait(false);
                     break;
                 case "get" when words.Length > 2:
-                    await PaletteGetCmd(msg);
+                    await PaletteGetCmd(msg).ConfigureAwait(false);
                     break;
                 case "del" when words.Length == 3:
-                    await PaletteDelCmd(msg);
+                    await PaletteDelCmd(msg).ConfigureAwait(false);
                     break;
                 default:
                     return;
@@ -253,12 +1108,10 @@ namespace CozyBot
             {
                 if (_moduleConfig.Palettes.Remove(q.First()))
                 {
-                    await SaveConfig();
-                    await msg.Channel.SendMessageAsync($"Palette {words[2]} deleted.");
+                    await SaveConfig().ConfigureAwait(false);
+                    await msg.Channel.SendMessageAsync($"Palette {words[2]} deleted.").ConfigureAwait(false);
                 }
             }
-            else
-                return;
         }
 
         private async Task PaletteGetCmd(SocketMessage msg)
@@ -268,36 +1121,89 @@ namespace CozyBot
             var q = _moduleConfig.Palettes.Where(p => p.Name == name);
             if (q.Any())
             {
-                if (words.Length > 3)
+                if (words.Length == 3)
                 {
-
+                    await SendNetTextPalette(msg, q.First()).ConfigureAwait(false);
+                    return;
                 }
+                else if (words.Length == 4)
+                {
+                    switch (words[3])
+                    {
+                        case ".net":
+                        case "text":
+                            await SendNetTextPalette(msg, q.First()).ConfigureAwait(false);
+                            return;
+                        case "file":
+                            await SendNetFilePalette(msg, q.First()).ConfigureAwait(false);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                else if (words.Length == 5)
+                { }
                 else
-                {
-                    var p = q.First();
-                    string output = @"```; pxls.space palette file for Paint.NET " + Environment.NewLine;
-                    List<string> outputList = new List<string>();
-                    foreach (var c in p.Colours)
-                    {
-                        outputList.Add($"FF{c.Red:X2}{c.Green:X2}{c.Blue:X2};");
-                    }
-
-                    foreach (var str in outputList)
-                    {
-                        if (output.Length + str.Length > 1950)
-                        {
-                            output += "```";
-                            await msg.Channel.SendMessageAsync(output);
-                            output = "```";
-                        }
-                        output += str + Environment.NewLine;
-                    }
-                    output += "```";
-                    await msg.Channel.SendMessageAsync(output);
-                }
+                    return;
             }
             else
-                return;
+            {
+                await msg.Channel.SendMessageAsync("Specified palette not found.").ConfigureAwait(false);
+            }
+        }
+
+        private async Task SendNetTextPalette(SocketMessage msg, Palette p)
+        {
+            string output = @"```; pxls.space palette file for Paint.NET " + Environment.NewLine;
+            var outputList = PaletteToNetStrings(p);
+                
+            foreach (var str in outputList)
+            {
+                if (output.Length + str.Length > 1950)
+                {
+                    output += "```";
+                    await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+                    output = "```";
+                }
+                output += str + Environment.NewLine;
+            }
+            output += "```";
+            await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+        }
+
+        private async Task SendNetFilePalette(SocketMessage msg, Palette p)
+        {
+            string output = @"; pxls.space palette file for Paint.NET " + Environment.NewLine;
+            var outputList = PaletteToNetStrings(p);
+
+            foreach (var str in outputList)
+            {
+                output += str + Environment.NewLine;
+            }
+
+            try
+            {
+                string filePath = Path.Combine(_modulePath, $"pnet-palette-{Guid.NewGuid()}.txt");
+                File.WriteAllText(filePath, output);
+                await msg.Channel.SendFileAsync(filePath).ConfigureAwait(false);
+                File.Delete(filePath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][PXLS] Catched:{ex.Message}");
+                Console.WriteLine($"[EXCEPT][PXLS] Stack  :{ex.StackTrace}");
+                throw;
+            }
+        }
+
+        private List<string> PaletteToNetStrings(Palette p)
+        {
+            List<string> outputList = new List<string>();
+            foreach (var c in p.Colours)
+            {
+                outputList.Add($"FF{c.Red:X2}{c.Green:X2}{c.Blue:X2};");
+            }
+            return outputList;
         }
 
         private async Task PaletteAddCmd(SocketMessage msg)
@@ -310,7 +1216,7 @@ namespace CozyBot
                     string name = words[2];
                     if (_moduleConfig.Palettes.Where(p => p.Name == name).Any())
                     {
-                        await msg.Channel.SendMessageAsync("Palette with this name already exists.");
+                        await msg.Channel.SendMessageAsync("Palette with this name already exists.").ConfigureAwait(false);
                         return;
                     }
                     var response = await _hc.GetAsync(msg.Attachments.First().Url);
@@ -336,7 +1242,9 @@ namespace CozyBot
 
                     _moduleConfig.Palettes.Add(palette);
 
-                    await SaveConfig();
+                    await SaveConfig().ConfigureAwait(false);
+
+                    await msg.Channel.SendMessageAsync($"Palette {name} added.").ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -356,7 +1264,7 @@ namespace CozyBot
             try
             {
                 var bytes = JsonSerializer.SerializeToUtf8Bytes<PxlsAlertsModuleConfig>(_moduleConfig, new JsonSerializerOptions() { WriteIndented = true });
-                await File.WriteAllBytesAsync(_moduleConfigFilePath, bytes);
+                await File.WriteAllBytesAsync(_moduleConfigFilePath, bytes).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -397,7 +1305,7 @@ namespace CozyBot
             {
                 if (output.Length + line.Length > 1950)
                 {
-                    await msg.Channel.SendMessageAsync(output);
+                    await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
                     output = String.Empty;
                 }
 
@@ -405,7 +1313,7 @@ namespace CozyBot
             }
 
             if (!String.IsNullOrEmpty(output) && !String.IsNullOrEmpty(output))
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
         }
 
         private async Task StatusCmd(SocketMessage msg)
@@ -414,22 +1322,22 @@ namespace CozyBot
             Console.WriteLine("[DEBUG][PXLS-ALERTS] Entered StatusCmd.");
 #endif
             string[] words = msg.Content.Split(" ");
-            string _inputUri = words[1];
+            string inputUri = words[1];
 
 
 #if DEBUG
             Console.WriteLine($"[DEBUG][PXLS-ALERTS] words[1] :{words[1]}");
 #endif
-            if (!_inputUri.StartsWith(@"https://pxls.space/#"))
+            if (!inputUri.StartsWith(@"https://pxls.space/#"))
                 return;
 
             var templateRegex = new Regex(_templateRegexPattern, RegexOptions.Compiled);
             var offsetxRegex = new Regex(_offsetxRegexPattern, RegexOptions.Compiled);
             var offsetyRegex = new Regex(_offsetyRegexPattern, RegexOptions.Compiled);
             
-            var templateMatch = templateRegex.Match(_inputUri);
-            var offsetxString = offsetxRegex.Match(_inputUri).Groups[1].Value;
-            var offsetyString = offsetyRegex.Match(_inputUri).Groups[1].Value;
+            var templateMatch = templateRegex.Match(inputUri);
+            var offsetxString = offsetxRegex.Match(inputUri).Groups[1].Value;
+            var offsetyString = offsetyRegex.Match(inputUri).Groups[1].Value;
 
             if (!Uri.TryCreate(templateMatch.Groups["uri"].Value, UriKind.RelativeOrAbsolute, out Uri uri))
 #if DEBUG
@@ -480,7 +1388,7 @@ namespace CozyBot
                 using var response = await _hc.GetAsync(Uri.UnescapeDataString($"{uri}"));
                 using var cs = await response.Content.ReadAsStreamAsync();
                 using (var fs = new FileStream(rawTemplatePath, FileMode.Create, FileAccess.ReadWrite))
-                    await cs.CopyToAsync(fs);
+                    await cs.CopyToAsync(fs).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -715,8 +1623,8 @@ namespace CozyBot
             try
             {
                 string outMsg = $"```{wrongPxls} incorrect from {totalPxls} total.{Environment.NewLine}Percent done : {100 - 100f * wrongPxls / totalPxls}```";
-                await msg.Channel.SendMessageAsync(outMsg);
-                await msg.Channel.SendFileAsync(wrongMapFilePath);
+                await msg.Channel.SendMessageAsync(outMsg).ConfigureAwait(false);
+                await msg.Channel.SendFileAsync(wrongMapFilePath).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -920,6 +1828,8 @@ namespace CozyBot
         public string Url { get; set; }
         [JsonPropertyName("paletteid")]
         public int PaletteId { get; set; }
+        [JsonPropertyName("addedby")]
+        public string AddedBy { get; set; }
     }
 
     public struct PxlsAlertsModuleConfig

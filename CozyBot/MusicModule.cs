@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -168,16 +168,16 @@ namespace CozyBot
 #if DEBUG
                     Console.WriteLine("[DEBUG][MUSIC] Starting stream copy.");
 #endif
-                    await pipeProc.StandardOutput.BaseStream.CopyToAsync(aus);
+                    await pipeProc.StandardOutput.BaseStream.CopyToAsync(aus).ConfigureAwait(false);
 #if DEBUG
                     Console.WriteLine("[DEBUG][MUSIC] Stream copy ended.");
 #endif
                 }
                 finally { await aus.FlushAsync(); }
 
-                await Task.Run(() => pipeProc.WaitForExit(5000));
+                await Task.Run(() => pipeProc.WaitForExit(5000)).ConfigureAwait(false);
 
-                await channel.DisconnectAsync();
+                await channel.DisconnectAsync().ConfigureAwait(false);
 #if DEBUG
                 Console.WriteLine("[DEBUG][MUSIC] Left PlayCmd.");
 #endif

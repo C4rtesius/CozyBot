@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Xml.Linq;
 using System.Threading;
@@ -54,11 +54,11 @@ namespace CozyBot
                 _client = new DiscordSocketClient();
                 _client.Log += Log;
 
-                await LoadCoreConfig();
+                await LoadCoreConfig().ConfigureAwait(false);
 
-                await _client.LoginAsync(TokenType.Bot, _token);
+                await _client.LoginAsync(TokenType.Bot, _token).ConfigureAwait(false);
 
-                await _client.StartAsync();
+                await _client.StartAsync().ConfigureAwait(false);
 
                 _client.Ready += 
                     () => { return Task.Run(ConfigGuilds); };
@@ -93,7 +93,7 @@ namespace CozyBot
         private async Task LoadCoreConfig()
         {
             _appBaseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            await LoadConfig();
+            await LoadConfig().ConfigureAwait(false);
         }
 
         private async Task ConfigGuilds()

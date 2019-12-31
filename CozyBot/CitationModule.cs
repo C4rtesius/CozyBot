@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text;
 using System.Xml.Linq;
@@ -123,7 +123,7 @@ namespace CozyBot
             {
                 try
                 {
-                    await msg.DeleteAsync();
+                    await msg.DeleteAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -158,7 +158,7 @@ namespace CozyBot
 
                 try
                 {
-                    await SendTextMessageHumanLike(msg, citation);
+                    await SendTextMessageHumanLike(msg, citation).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -189,7 +189,7 @@ namespace CozyBot
                     );
                 }
 
-                await ModuleConfigChanged();
+                await ModuleConfigChanged().ConfigureAwait(false);
                 Reconfigure(_configEl);
             };
         }
@@ -202,8 +202,8 @@ namespace CozyBot
         /// <returns>Async Task performing sending message in human-like fashion.</returns>
         private async Task SendTextMessageHumanLike(SocketMessage msg, string line)
         {
-            await Task.Delay(1500 + (_rnd.Next() % 2000));
-            await msg.Channel.TriggerTypingAsync();
+            await Task.Delay(1500 + (_rnd.Next() % 2000)).ConfigureAwait(false);
+            await msg.Channel.TriggerTypingAsync().ConfigureAwait(false);
 
             // Making delay dependent on citation length
             // further testing needed
@@ -212,13 +212,13 @@ namespace CozyBot
             int totalDelay = 500 + line.Length * 50 + (_rnd.Next() % 2000);
             for (; totalDelay > 5000; totalDelay -= 5000)
             {
-                await Task.Delay(5000);
-                await msg.Channel.TriggerTypingAsync();
+                await Task.Delay(5000).ConfigureAwait(false);
+                await msg.Channel.TriggerTypingAsync().ConfigureAwait(false);
             }
-            await Task.Delay(totalDelay);
+            await Task.Delay(totalDelay).ConfigureAwait(false);
 
             //await Task.Delay(3000 + (_rnd.Next() % 4000));
-            await msg.Channel.SendMessageAsync(line);
+            await msg.Channel.SendMessageAsync(line).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -230,7 +230,7 @@ namespace CozyBot
         {
             try
             {
-                await msg.DeleteAsync();
+                await msg.DeleteAsync().ConfigureAwait(false);
             }
             catch
             {
@@ -308,7 +308,7 @@ namespace CozyBot
 
             try
             {
-                await ModuleConfigChanged();
+                await ModuleConfigChanged().ConfigureAwait(false);
             }
             catch
             {
@@ -317,7 +317,7 @@ namespace CozyBot
 
             Reconfigure(_configEl);
 
-            await msg.Channel.SendMessageAsync($"Записав цитатку {EmojiCodes.DankPepe}");
+            await msg.Channel.SendMessageAsync($"Записав цитатку {EmojiCodes.DankPepe}").ConfigureAwait(false);
         }
 
         protected override void GenerateUseCommands(List<ulong> perms)
@@ -345,7 +345,7 @@ namespace CozyBot
         {
             try
             {
-                await msg.DeleteAsync();
+                await msg.DeleteAsync().ConfigureAwait(false);
             }
             catch
             {
@@ -406,12 +406,12 @@ namespace CozyBot
 
             foreach (var outputMsg in outputMsgs)
             {
-                await ch.SendMessageAsync(outputMsg);
+                await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
             }
 
             try
             {
-                await msg.Channel.SendMessageAsync($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}");
+                await msg.Channel.SendMessageAsync($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
             }
             catch
             {
@@ -423,7 +423,7 @@ namespace CozyBot
         {
             try
             {
-                await msg.DeleteAsync();
+                await msg.DeleteAsync().ConfigureAwait(false);
             }
             catch
             {
@@ -493,7 +493,7 @@ namespace CozyBot
 
             foreach (var outputMsg in outputMsgs)
             {
-                await ch.SendMessageAsync(outputMsg);
+                await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
             }
 
             try
@@ -513,7 +513,7 @@ namespace CozyBot
             {
                 try
                 {
-                    await msg.DeleteAsync();
+                    await msg.DeleteAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -561,7 +561,7 @@ namespace CozyBot
 
                 var dm = await msg.Author.GetOrCreateDMChannelAsync();
 
-                await dm.SendMessageAsync(String.Empty, false, eb.Build());
+                await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
                 await msg.Channel.SendMessageAsync(
                     $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}");
@@ -634,7 +634,7 @@ namespace CozyBot
             if (citationsDeleted.Count > 0)
             {
                 //await RaiseConfigChanged(_configEl);
-                await ModuleConfigChanged();
+                await ModuleConfigChanged().ConfigureAwait(false);
                 Reconfigure(_configEl);
                 //GenerateUseCommands(ExtractPermissions(_moduleConfig.Root.Attribute("usePerm")));
                 string output = @"Видалив наступні цитати :" + Environment.NewLine + @"```";
@@ -644,11 +644,11 @@ namespace CozyBot
                 }
                 output += "```" + Environment.NewLine + EmojiCodes.Pepe;
 
-                await msg.Channel.SendMessageAsync(output);
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
             }
             else
             {
-                await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat);
+                await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat).ConfigureAwait(false);
             }
         }
         

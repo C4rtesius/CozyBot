@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -53,7 +53,7 @@ namespace CozyBot
 
         public async Task ExecuteCommand(SocketMessage msg)
         {
-            await _cmd(msg);
+            await _cmd(msg).ConfigureAwait(false);
         }
 
 

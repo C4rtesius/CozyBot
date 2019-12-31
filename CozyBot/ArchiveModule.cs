@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Text;
@@ -276,7 +276,7 @@ namespace CozyBot
                             Task.Run(
                                 async () =>
                                 {
-                                    await DumpChannelById(acp.Id);
+                                    await DumpChannelById(acp.Id).ConfigureAwait(false);
                                 }
                             );
 
@@ -296,7 +296,7 @@ namespace CozyBot
                         newTimer.Elapsed +=
                             async (o, e) =>
                             {
-                                await DumpChannelById(acp.Id);
+                                await DumpChannelById(acp.Id).ConfigureAwait(false);
                             };
                         _timersDict.Add(acp.Id, newTimer);
 
@@ -304,7 +304,7 @@ namespace CozyBot
                         Task.Run(
                             async () =>
                             {
-                                await DumpChannelById(acp.Id);
+                                await DumpChannelById(acp.Id).ConfigureAwait(false);
                             }
                         );
 
@@ -502,7 +502,7 @@ namespace CozyBot
             {
                 if (words[0] == "x!dump")
                 {
-                    await DumpChannelById(msg.Channel.Id);
+                    await DumpChannelById(msg.Channel.Id).ConfigureAwait(false);
                 }
             }
             else if (words[0] == "x!dump")
@@ -511,7 +511,7 @@ namespace CozyBot
                 {
                     foreach(var channel in msg.MentionedChannels)
                     {
-                        await DumpChannelById(channel.Id);
+                        await DumpChannelById(channel.Id).ConfigureAwait(false);
                     }
                 }
             }
@@ -537,7 +537,7 @@ namespace CozyBot
 
                     _moduleConfigEl.Add(newChannel);
 
-                    await RaiseConfigChanged(_configEl);
+                    await RaiseConfigChanged(_configEl).ConfigureAwait(false);
                     GenerateChannels(_moduleConfigEl);
 
                 }
@@ -549,17 +549,17 @@ namespace CozyBot
                 {
                     try
                     {
-                        await DumpChannel(_channels[id]);
+                        await DumpChannel(_channels[id]).ConfigureAwait(false);
                         success = true;
                     }
                     catch (Discord.Net.RateLimitedException)
                     {
                         tries++;
                         success = false;
-                        await Task.Delay(10000);
+                        await Task.Delay(10000).ConfigureAwait(false);
                     }
                 }
-                await RaiseConfigChanged(_configEl);
+                await RaiseConfigChanged(_configEl).ConfigureAwait(false);
                 GenerateChannels(_moduleConfigEl);
             }
             catch (Exception ex)
@@ -703,7 +703,7 @@ namespace CozyBot
                         eb.Fields.Add(efb);
 
                         var ch = (_guild.GetChannel(_logChannelId) as SocketTextChannel);
-                        await ch.SendMessageAsync(String.Empty, false, eb.Build());
+                        await ch.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
                     }
 
                     String sendMsg = $"Збережено {lines} повідомлень. {EmojiCodes.Picardia}";
@@ -720,7 +720,7 @@ namespace CozyBot
                     {
                         try
                         {
-                            await sendChannel.SendMessageAsync(sendMsg);
+                            await sendChannel.SendMessageAsync(sendMsg).ConfigureAwait(false);
                         }
                         catch { }
                     }
@@ -758,14 +758,14 @@ namespace CozyBot
                             eb.Fields.Add(efb);
 
                             var ch = (_guild.GetChannel(_logChannelId) as SocketTextChannel);
-                            await ch.SendMessageAsync(String.Empty, false, eb.Build());
+                            await ch.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
                         }
 
                         if (!acp.Silent)
                         {
                             try
                             {
-                                await sendChannel.SendMessageAsync($"Збережено {images} зображень. {EmojiCodes.Picardia}");
+                                await sendChannel.SendMessageAsync($"Збережено {images} зображень. {EmojiCodes.Picardia}").ConfigureAwait(false);
                             }
                             catch { }
                         }
@@ -890,7 +890,7 @@ namespace CozyBot
                                     string file = Path.Combine(filepath, $"{timestamp}-{num}{Path.GetExtension(att.Url)}");
                                     using FileStream fs = new FileStream(file, FileMode.Create, FileAccess.Write);
                                     var response = await hc.GetAsync(att.Url);
-                                    await response.Content.CopyToAsync(fs);
+                                    await response.Content.CopyToAsync(fs).ConfigureAwait(false);
                                     num++;
                                     images++;
                                 }
@@ -900,7 +900,7 @@ namespace CozyBot
                 );
             }
 
-            await Task.WhenAll(tasklist);
+            await Task.WhenAll(tasklist).ConfigureAwait(false);
 
             return images;
         }
@@ -1001,15 +1001,15 @@ namespace CozyBot
 
                     foreach (var outputMsg in outputMsgs)
                     {
-                        await msg.Channel.SendMessageAsync(outputMsg);
+                        await msg.Channel.SendMessageAsync(outputMsg).ConfigureAwait(false);
                     }
                     return;
                 case "perm" when words.Length > 3:
-                    await PermissionControlCommand(words[2], msg);
+                    await PermissionControlCommand(words[2], msg).ConfigureAwait(false);
                     return;
                 case "setlog":
-                    await SetLogCommand(words[2], msg);
-                    await msg.Channel.SendMessageAsync($"Налаштування було змінено {EmojiCodes.Picardia}");
+                    await SetLogCommand(words[2], msg).ConfigureAwait(false);
+                    await msg.Channel.SendMessageAsync($"Налаштування було змінено {EmojiCodes.Picardia}").ConfigureAwait(false);
                     return;
                 default:
                     if (msg.MentionedChannels.Count <= 0)
@@ -1084,12 +1084,12 @@ namespace CozyBot
                
             }
 
-            await RaiseConfigChanged(_configEl);
+            await RaiseConfigChanged(_configEl).ConfigureAwait(false);
 
             GenerateChannels(_moduleConfigEl);
             GenerateTimers();
 
-            await msg.Channel.SendMessageAsync($"Налаштування було змінено {EmojiCodes.Picardia}");
+            await msg.Channel.SendMessageAsync($"Налаштування було змінено {EmojiCodes.Picardia}").ConfigureAwait(false);
         }
 
         protected virtual async Task SetLogCommand(string channelStr, SocketMessage msg)
@@ -1117,7 +1117,7 @@ namespace CozyBot
                 }
                 logChannelAttr.Value = _logChannelId.ToString();
 
-                await RaiseConfigChanged(_configEl);
+                await RaiseConfigChanged(_configEl).ConfigureAwait(false);
             }
         }
 
@@ -1134,18 +1134,18 @@ namespace CozyBot
             switch (category)
             {
                 case "cfg":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("cfgPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfigEl.Attribute("cfgPerm"), rolesIds).ConfigureAwait(false);
                     GenerateCfgCommands(rolesIds);
                     break;
                 case "dump":
-                    await ModifyPermissions(_moduleConfigEl.Attribute("dmpPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfigEl.Attribute("dmpPerm"), rolesIds).ConfigureAwait(false);
                     GenerateDmpCommands(rolesIds);
                     break;
                 default:
                     break;
             }
 
-            await msg.Channel.SendMessageAsync($"Дозволи було змінено {EmojiCodes.Picardia}");
+            await msg.Channel.SendMessageAsync($"Дозволи було змінено {EmojiCodes.Picardia}").ConfigureAwait(false);
         }
 
         protected virtual async Task ModifyPermissions(XAttribute attr, List<ulong> ids)
@@ -1159,7 +1159,7 @@ namespace CozyBot
 
             attr.Value = newValue;
 
-            await RaiseConfigChanged(_configEl);
+            await RaiseConfigChanged(_configEl).ConfigureAwait(false);
         }
 
         protected async Task RaiseConfigChanged(XElement configEl)

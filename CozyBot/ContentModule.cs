@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Xml;
 using System.Text;
@@ -739,7 +739,7 @@ namespace CozyBot
                 switch (words[1])
                 {
                     case "perm":
-                        await PermissionControlCommand(words[2], msg);
+                        await PermissionControlCommand(words[2], msg).ConfigureAwait(false);
                         break;
                     default:
                         break;
@@ -766,26 +766,26 @@ namespace CozyBot
             switch (category)
             {
                 case "cfg":
-                    await ModifyPermissions(_moduleConfig.Root.Attribute("cfgPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("cfgPerm"), rolesIds).ConfigureAwait(false);
                     GenerateCfgCommands(rolesIds);
                     break;
                 case "add":
-                    await ModifyPermissions(_moduleConfig.Root.Attribute("addPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("addPerm"), rolesIds).ConfigureAwait(false);
                     GenerateAddCommands(rolesIds);
                     break;
                 case "use":
-                    await ModifyPermissions(_moduleConfig.Root.Attribute("usePerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("usePerm"), rolesIds).ConfigureAwait(false);
                     GenerateUseCommands(rolesIds);
                     break;
                 case "del":
-                    await ModifyPermissions(_moduleConfig.Root.Attribute("delPerm"), rolesIds);
+                    await ModifyPermissions(_moduleConfig.Root.Attribute("delPerm"), rolesIds).ConfigureAwait(false);
                     GenerateDelCommands(rolesIds);
                     break;
                 default:
                     break;
             }
 
-            await msg.Channel.SendMessageAsync("Дозволи було змінено " + EmojiCodes.Picardia);
+            await msg.Channel.SendMessageAsync("Дозволи було змінено " + EmojiCodes.Picardia).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -805,7 +805,7 @@ namespace CozyBot
 
             attr.Value = newValue;
 
-            await ModuleConfigChanged();
+            await ModuleConfigChanged().ConfigureAwait(false);
         }
 
         /// <summary>
