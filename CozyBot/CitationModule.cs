@@ -2,8 +2,10 @@ using System;
 using System.IO;
 using System.Text;
 using System.Xml.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 using Discord;
@@ -59,6 +61,11 @@ namespace CozyBot
         private string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)\s+(?<content>[\s\S]+)$";
 
         /// <summary>
+        /// ConcurrentDictionary to implement ratelimiting per user, per channel, per command key.
+        /// </summary>
+        private ConcurrentDictionary<string, Task> _ratelimitDict;
+
+        /// <summary>
         /// Forbidden keys (because they are valid commands).
         /// </summary>
         protected string[] _blacklistedKeys = new string[]
@@ -110,6 +117,8 @@ namespace CozyBot
             {
                 Directory.CreateDirectory(Path.Combine(_guildPath, _moduleFolder));
             }
+
+            _ratelimitDict = new ConcurrentDictionary<string, Task>();
         }
 
         /// <summary>
@@ -129,6 +138,12 @@ namespace CozyBot
                 {
                     // TODO: add logging or specify concrete Exception (?)
                 }
+
+                string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
+                if (_ratelimitDict.ContainsKey(dictKey))
+                    return;
+                else
+                    _ratelimitDict.TryAdd(dictKey, Task.Run(() => { Thread.Sleep(10000); _ratelimitDict.TryRemove(dictKey, out _); }));
 
                 var citationsList = GetItemsListByKey(key);
                 if (citationsList.Count == 0)

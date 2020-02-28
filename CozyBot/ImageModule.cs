@@ -2,8 +2,10 @@ using System;
 using System.IO;
 using System.Xml.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 using Discord;
@@ -52,6 +54,11 @@ namespace CozyBot
         /// Regex used in Add command parsing.
         /// </summary>
         private string _addCommandRegex = @"^(?<pref>\S+)\s+(?<key>\S+)$";
+
+        /// <summary>
+        /// ConcurrentDictionary to implement ratelimiting per user, per channel, per command key.
+        /// </summary>
+        private ConcurrentDictionary<string, Task> _ratelimitDict;
 
         /// <summary>
         /// Module XML config path.
@@ -124,6 +131,8 @@ namespace CozyBot
             {
                 Directory.CreateDirectory(Path.Combine(_guildPath, _moduleFolder));
             }
+
+            _ratelimitDict = new ConcurrentDictionary<string, Task>();
         }
 
         protected override Func<SocketMessage, Task> UseCommandGenerator(string key)
@@ -138,6 +147,11 @@ namespace CozyBot
                 {
                     // TODO: add logging or specify concrete Exception (?)
                 }
+                string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
+                if (_ratelimitDict.ContainsKey(dictKey))
+                    return;
+                else
+                    _ratelimitDict.TryAdd(dictKey, Task.Run(() => { Thread.Sleep(10000); _ratelimitDict.TryRemove(dictKey, out _); }));
 
                 var imgList = GetItemsListByKey(key);
                 if (imgList.Count == 0)
@@ -534,7 +548,7 @@ namespace CozyBot
             output += @"```";
             outputMsgs.Add(output);
 
-            var ch = await msg.Author.GetOrCreateDMChannelAsync();
+            var ch = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
 
             foreach (var outputMsg in outputMsgs)
             {
@@ -643,7 +657,7 @@ namespace CozyBot
 
                 eb.Fields.Add(efb);
 
-                var dm = await msg.Author.GetOrCreateDMChannelAsync();
+                var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
 
                 await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
@@ -681,7 +695,7 @@ namespace CozyBot
                 try
                 {
                     await Task.Run(() => File.Delete(
-                        Path.Combine(_guildPath, _moduleFolder, delKVP.Value.Value)));
+                        Path.Combine(_guildPath, _moduleFolder, delKVP.Value.Value))).ConfigureAwait(false);
                 }
                 catch
                 {
