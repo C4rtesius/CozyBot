@@ -8,38 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="334771623049822220\**" />
-    <Compile Remove="455870602813767680\**" />
-    <Compile Remove="508416694411067442\**" />
-    <Compile Remove="bak\**" />
-    <Compile Remove="cite\**" />
-    <Compile Remove="img\**" />
-    <Compile Remove="userimg\**" />
-    <EmbeddedResource Remove="334771623049822220\**" />
-    <EmbeddedResource Remove="455870602813767680\**" />
-    <EmbeddedResource Remove="508416694411067442\**" />
-    <EmbeddedResource Remove="bak\**" />
-    <EmbeddedResource Remove="cite\**" />
-    <EmbeddedResource Remove="img\**" />
-    <EmbeddedResource Remove="userimg\**" />
-    <None Remove="334771623049822220\**" />
-    <None Remove="455870602813767680\**" />
-    <None Remove="508416694411067442\**" />
-    <None Remove="bak\**" />
-    <None Remove="cite\**" />
-    <None Remove="img\**" />
-    <None Remove="userimg\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="ILoggableModule.cs" />
-    <Compile Remove="LoggingModule.cs" />
-    <Compile Remove="ModerationModule.cs" />
-    <Compile Remove="ModuleLoggedArgs.cs" />
-    <Compile Remove="TimedPostModule.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Remove="config - Copy.xml" />
     <None Remove="DiscordBot1.zip" />
     <None Remove="publish-Debug.tar" />
@@ -49,12 +17,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ApplicationDefinition Include="publish.bat" />
+    <ApplicationDefinition Include="publish.bat">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ApplicationDefinition>
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Discord.Net" Version="2.1.1" />
-    <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.6">
+    <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.8">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

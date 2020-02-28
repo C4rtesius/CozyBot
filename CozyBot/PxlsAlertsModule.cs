@@ -224,6 +224,14 @@ namespace CozyBot
                 )
             );
 
+            list.Add(
+                new BotCommand(
+                    StringID + "-help",
+                    RuleGenerator.PrefixatedCommand(_prefix, "help"),
+                    HelpCmd
+                )
+            );
+
             //list.Add(
             //    new BotCommand(
             //        StringID + "-detemplatize",
@@ -233,6 +241,76 @@ namespace CozyBot
             //);
 
             _useCommands = list;
+        }
+
+        private async Task HelpCmd(SocketMessage msg)
+        {
+            Guard.NonNull(msg, nameof(msg));
+            if (msg.Author is SocketGuildUser user)
+            {
+                try
+                {
+                    await msg.DeleteAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+
+                }
+
+                var guild = user.Guild;
+                string iconUrl = guild.IconUrl;
+                var eba = new EmbedAuthorBuilder
+                {
+                    Name = @"Shining Armor"
+                    //, IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
+                };
+
+                var efb = new EmbedFieldBuilder
+                {
+                    IsInline = false,
+                    Name = "Команди піксельного модуля",
+                    Value =
+                        _prefix + @"status [посилання на шаблон] - стан виконання шаблону за посиланням" + Environment.NewLine +
+                        _prefix + @"palette list - список палітр" + Environment.NewLine +
+                        _prefix + @"palette add [назва палітри] [файл палітри] - додати палітру" + Environment.NewLine +
+                        _prefix + @"palette get [назва палітри] ?[text|file] - отримати палітру у вигляді тексту або файлу" + Environment.NewLine +
+                        _prefix + @"palette del [назва палітри] - видалити палітру" + Environment.NewLine +
+                        _prefix + @"template list - список шаблонів" + Environment.NewLine +
+                        _prefix + @"template add [назва шаблону] [посилання на шаблон] - додати шаблон" + Environment.NewLine +
+                        _prefix + @"template del [назва шаблону] - видалити шаблон" + Environment.NewLine +
+                        _prefix + @"template get [назва шаблону] - отримати шаблон та метадані" + Environment.NewLine +
+                        _prefix + @"template detempl [пікча|посилання] ?[назва палітри] - отримати зображення з шаблона" + Environment.NewLine +
+                        _prefix + @"template make [пікча|посилання] ?dotted ?[назва палітри] - отримати шаблон з зображення" + Environment.NewLine +
+                        _prefix + @"help - цей список команд"
+                };
+
+                var efob = new EmbedFooterBuilder
+                {
+                    Text = "Мы в котле были в первую пиксельную."
+                };
+
+                var eb = new EmbedBuilder
+                {
+                    Author = eba,
+                    Color = Discord.Color.Green,
+                    ThumbnailUrl = iconUrl,
+                    Title = "Довідка :",
+                    Timestamp = DateTime.Now,
+                    Footer = efob
+                };
+
+                eb.Fields.Add(efb);
+
+                var dm = await msg.Author.GetOrCreateDMChannelAsync();
+
+                await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
+
+                string output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
+
+                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+
+
+            }
         }
 
         private async Task DetemplatizeCmd(SocketMessage msg)
