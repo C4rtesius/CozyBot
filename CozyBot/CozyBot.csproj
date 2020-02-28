@@ -12,6 +12,9 @@
     <None Remove="DiscordBot1.zip" />
     <None Remove="publish-Debug.tar" />
     <None Remove="publish-Debug.tar.xz" />
+    <None Remove="publish-Release.tar" />
+    <None Remove="publish-Release.tar.xz" />
+    <None Remove="publish-remote_2.bat" />
     <None Remove="publish.bat" />
     <None Remove="remote.txt" />
   </ItemGroup>

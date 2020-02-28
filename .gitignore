@@ -259,7 +259,9 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
-/CozyBot/508416694411067442
 /CozyBot/publish-Debug.tar
 /CozyBot/publish-Debug.tar.xz
 /CozyBot/remote.txt
+/CozyBot/publish-remote_2.bat
+/CozyBot/publish-Release.tar.xz
+/CozyBot/publish-Release.tar
