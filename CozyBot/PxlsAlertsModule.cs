@@ -519,7 +519,7 @@ namespace CozyBot
                     return String.Empty;
                 }
 #else
-                    return;
+                    return String.Empty;
 #endif
                 url = Uri.UnescapeDataString(templateMatch.Groups["uri"].Value);
                 fileName = templateMatch.Groups["file"].Value;
@@ -533,7 +533,7 @@ namespace CozyBot
                     return String.Empty;
                 }
 #else
-                    return;
+                    return String.Empty;
 #endif
                 url = Uri.UnescapeDataString(url);
                 fileName = (new FileInfo(url)).Name;
