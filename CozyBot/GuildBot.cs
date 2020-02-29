@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Xml.Linq;
 using System.Threading.Tasks;
@@ -247,10 +248,157 @@ namespace CozyBot
                     "magic8ballcmd",
                     RuleGenerator.PrefixatedCommand(_prefix, "8ball"),
                     Magic8BallCommand
+                    ),
+                new BotCommand(
+                    "limbocmd",
+                    RuleGenerator.PrefixatedCommand(_prefix, "limbo") &
+                    RuleGenerator.UserByID(_superUserID),
+                    LimboCommand
                     )
             };
         }
+        
+        private async Task LimboCommand(SocketMessage msg)
+        {
+            var sw = new System.Diagnostics.Stopwatch();
+            sw.Start();
+            await _guild.DownloadUsersAsync().ConfigureAwait(false);
+            var passiveDict = new Dictionary<ulong, DateTime>();
+            var activeDict = new Dictionary<ulong, DateTime>();
+            var timestamp = DateTime.UtcNow;
+            var timeDiff = TimeSpan.FromDays(60.0d);
+            var timeBoundary = timestamp - timeDiff;
+            var searchChannelsList = new List<ulong>()
+            {
+                455231703368073228u,    // yerevan
+                502949010278055947u,    // bioproblems
+                594216681291644960u,    // sport-phys
+                455301207486103552u,    // memes
+                594216520947859472u,    // arts
+                455284470577102858u,    // international
+                482555295055347712u,    // science-and-it
+                622677140583743488u,    // military
+                518529241118408738u,    // music
+                618915135469125671u,    // books
+                455293744464527375u,    // anime
+                455317918930960384u,    // politach
+                455285679849472010u,    // gazem
+                456882800474456064u,    // paradox
+                455311999237095424u,    // pubg
+                455314596648189963u,    // factorio
+                576069178427965450u,    // ecc
+                455292440794890251u,    // he
+                557996950620995584u,    // fu
+                455302382188756993u,    // 3d
+                576069373001728010u     // ot
+            };
 
+            foreach(var user in _guild.Users)
+            {
+                var roleIds = user.Roles.Select(r => r.Id);
+                if (roleIds.Contains(455287352701616128u)) // pxls
+                    continue;
+                if (roleIds.Contains(455283878223937556u)) // cz pxls infantry
+                    continue;
+                if (roleIds.Contains(455284945774968833u)) // unterdїd
+                    continue;
+                if (roleIds.Contains(594215839503220752u)) // foreigndїd
+                    continue;
+                if (roleIds.Contains(455284885960130560u)) // dїd
+                    continue;
+                if (roleIds.Contains(683422699367956481u)) // readonly
+                    continue;
+                if (user.IsBot)                            // bot
+                    continue;
+                if (user.JoinedAt.Value.UtcDateTime > timeBoundary) // if user joined after search boundary time
+                    continue;
+                if (roleIds.Contains(455285000330543104u)) // vault dw
+                    passiveDict.Add(user.Id, timestamp);
+            }
+
+            int qs = 0;
+
+            foreach(var chId in searchChannelsList)
+            {
+                Discord.IMessage lastMsg = null;
+                if (_guild.GetChannel(chId) is SocketTextChannel stc)
+                {
+                    int q = 0;
+                    var asyncMessages = stc.GetMessagesAsync();
+                    var enumerator = asyncMessages.GetEnumerator();
+
+                    try
+                    {
+                        while (await enumerator.MoveNext().ConfigureAwait(false))
+                        {
+                            foreach (var message in enumerator.Current)
+                            {
+                                var usrId = message.Author.Id;
+                                if (passiveDict.Keys.Contains(usrId))
+                                    passiveDict.Remove(usrId);
+                                lastMsg = message;
+                                q++;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : {stc.Name}\n{ex.Message}\n{ex.StackTrace}");
+                        throw;
+                    }
+
+                    while (lastMsg.Timestamp > timeBoundary)
+                    {
+                        asyncMessages = stc.GetMessagesAsync(lastMsg, Discord.Direction.Before);
+                        enumerator = asyncMessages.GetEnumerator();
+
+                        try
+                        {
+                            while (await enumerator.MoveNext().ConfigureAwait(false))
+                            {
+                                foreach (var message in enumerator.Current)
+                                {
+                                    var usrId = message.Author.Id;
+                                    if (passiveDict.Keys.Contains(usrId))
+                                        passiveDict.Remove(usrId);
+                                    lastMsg = message;
+                                    q++;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : {stc.Name}\n{ex.Message}\n{ex.StackTrace}");
+                            throw;
+                        }
+                    }
+                    await msg.Channel.SendMessageAsync($"Processed {q} messages in {stc.Mention}.\n{passiveDict.Keys.Count} users left.").ConfigureAwait(false);
+                    qs += q;
+                }
+            }
+
+//#if DEBUG
+            List<string> msgStrs = new List<string>();
+            var messageStr = String.Empty;
+            foreach (var userId in passiveDict.Keys)
+            {
+                if (messageStr.Length > 1950)
+                {
+                    msgStrs.Add(messageStr);
+                    messageStr = String.Empty;
+                }
+                messageStr += $"{_guild.GetUser(userId).Mention} ";
+            }
+            msgStrs.Add(messageStr);
+            
+            foreach (var str in msgStrs)
+            {
+                await msg.Channel.SendMessageAsync(str).ConfigureAwait(false);
+            }
+//#endif
+            sw.Stop();
+            await msg.Channel.SendMessageAsync($"Left {passiveDict.Count} users.\nProcessed {qs} messages in {sw.Elapsed.TotalSeconds} seconds.").ConfigureAwait(false);
+        }
 
         private async Task SaveConfig()
         {

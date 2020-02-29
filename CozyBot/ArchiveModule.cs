@@ -924,7 +924,7 @@ namespace CozyBot
             catch (Exception ex)
             {
                 Console.WriteLine($"[EXCEPT][ARCHIVEMODULE] Fetch Messages failed : {textChannel.Name}");
-                throw ex;
+                throw;
             }
 
             return list;
