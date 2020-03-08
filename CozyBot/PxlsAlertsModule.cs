@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Timers;
 using System.Xml.Linq;
 using System.Net.Http;
 using System.Text.Json;
@@ -20,8 +21,10 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace CozyBot
 {
-    public class PxlsAlertsModule : IGuildModule
+    public class PxlsAlertsModule : IGuildModule, IDisposable
     {
+        private static ulong _pxlsOfficerId = 455305432312053760u;
+
         private static string _stringID => "PxlsAlertsModule";
         private static string _moduleXmlName => "pxls-alerts";
         private static string _moduleFolder => @"pxls-alerts";
@@ -33,6 +36,10 @@ namespace CozyBot
         private PxlsAlertsModuleConfig _moduleConfig;
 
         private SocketGuild _guild;
+
+        private Timer _alertTimer;
+        private Timer _statsTimer;
+        private static int _defaultTimeSpan = 120;
 
         protected XElement _configEl;
         protected List<ulong> _adminIds;
@@ -92,7 +99,8 @@ namespace CozyBot
             _configEl = Guard.NonNull(configEl, nameof(configEl));
             _guildPath = Guard.NonNullWhitespaceEmpty(guildPath, nameof(guildPath));
             _adminIds = adminIds;
-            
+            _alertTimer = new Timer();
+
             if (_configEl.Element(ModuleXmlName) == null)
             {
                 XElement moduleConfigEl =
@@ -154,6 +162,26 @@ namespace CozyBot
                 GenerateUseCommands();
             else
                 _useCommands = new List<IBotCommand>();
+            if (_moduleConfig.Alerts == null)
+            {
+                _moduleConfig.Alerts = new Alerts() { Interval = _defaultTimeSpan };
+#if DEBUG
+                Console.WriteLine($"[DEBUG][PXLS] _moduleConfig.Alerts is NULL");
+            }
+            else
+            {
+                Console.WriteLine($"[DEBUG][PXLS] _moduleConfig.Alerts is NOT NULL");
+            }
+            {
+                Console.WriteLine($"[DEBUG][PXLS] Interval value: {_moduleConfig.Alerts.Interval}");
+                Console.WriteLine($"[DEBUG][PXLS] ChannelId value: {_moduleConfig.Alerts.ChannelId}");
+                Console.WriteLine($"[DEBUG][PXLS] TemplateIds Any(): {_moduleConfig.Alerts.TemplateIds.Any()}");
+#endif
+            }
+            _alertTimer.Interval = _moduleConfig.Alerts.Interval * 60000;
+            _alertTimer.Elapsed += AlertTimerElapsed;
+            _alertTimer.AutoReset = true;
+            _alertTimer.Start();
         }
 
         private PxlsAlertsModuleConfig LoadConfig(string filePath)
@@ -173,7 +201,7 @@ namespace CozyBot
 
         private void CreateDefaultConfig()
         {
-            var cfg = new PxlsAlertsModuleConfig() { Palettes = new List<Palette>(), Templates = new List<Template>() };
+            var cfg = new PxlsAlertsModuleConfig() { Palettes = new List<Palette>(), Templates = new List<Template>(), Alerts = new Alerts(), Stats = new Stats()};
             var o = new JsonSerializerOptions() { WriteIndented = true };
             var data = JsonSerializer.SerializeToUtf8Bytes<PxlsAlertsModuleConfig>(cfg, o);
             try
@@ -232,6 +260,22 @@ namespace CozyBot
                 )
             );
 
+            list.Add(
+                new BotCommand(
+                    StringID + "-alert",
+                    RuleGenerator.PrefixatedCommand(_prefix, "alert"),
+                    AlertCmd
+                )
+            );
+
+            list.Add(
+                new BotCommand(
+                    StringID + "-stats",
+                    RuleGenerator.PrefixatedCommand(_prefix, "stats"),
+                    StatsCmd
+                )
+            );
+
             //list.Add(
             //    new BotCommand(
             //        StringID + "-detemplatize",
@@ -241,6 +285,859 @@ namespace CozyBot
             //);
 
             _useCommands = list;
+        }
+
+        private async Task StatsCmd(SocketMessage msg)
+        {
+            try
+            {
+#if DEBUG
+                Console.WriteLine("[DEBUG][PXLS] Entered StatsCmd.");
+#endif
+                var words = msg.Content.Split(' ');
+                if (words.Length == 1)
+                {
+                    await StatsUsrCmd(msg);
+                    return;
+                }
+                var r = (msg.Author as SocketGuildUser).Roles.Select(r => r.Id);
+
+                switch (words[1])
+                {
+                    case "g":
+                    case "gl":
+                    case "glob":
+                    case "global":
+                        await StatsGlobalCmd(msg).ConfigureAwait(false);
+                        break;
+                    case "c":
+                    case "can":
+                    case "canv":
+                    case "canvas":
+                        await StatsCanvasCmd(msg).ConfigureAwait(false);
+                        break;
+                    case "cfg":
+                    case "conf":
+                    case "config":
+                        if (!r.Contains(_pxlsOfficerId))
+                            return;
+                        if (words.Length > 2)
+                            await StatsCfgCmd(msg).ConfigureAwait(false);
+                        break;
+                    case "m":
+                    case "me":
+                        await StatsUsrCmd(msg).ConfigureAwait(false);
+                        return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][PXLS] {ex.Message}");
+                Console.WriteLine($"[EXCEPT][PXLS] {ex.StackTrace}");
+                throw;
+            }
+
+        }
+
+        private async Task StatsUsrCmd(SocketMessage msg)
+        {
+#if DEBUG
+            Console.WriteLine("[DEBUG][PXLS] Entered StatsUsrCmd.");
+#endif
+            var q = _moduleConfig.Stats.Users.Where(u => u.UserId == msg.Author.Id);
+            if (!q.Any())
+            {
+                await msg.Channel.SendMessageAsync($"{msg.Author.Mention} вашого айді не знайдено. Зверніться до піксельного офіцера.").ConfigureAwait(false);
+            }
+
+            var userName = q.First().CanvasName;
+
+            //var words = msg.Content.Split(' ');
+            if (_moduleConfig.Stats.LastDownload < DateTime.UtcNow - TimeSpan.FromMinutes(15.0d))
+            {
+                await DownloadStatsJson().ConfigureAwait(false);
+            }
+            string statsJsonPath = Path.Combine(_modulePath, "stats.json");
+            StatsJson stats = null;
+            using (var fs = new FileStream(statsJsonPath, FileMode.Open, FileAccess.ReadWrite))
+            {
+                try
+                {
+                    stats = await JsonSerializer.DeserializeAsync<StatsJson>(fs);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EXCEPT][PXLS] {ex.Message}");
+                    Console.WriteLine($"[EXCEPT][PXLS] {ex.StackTrace}");
+                    throw;
+                }
+            }
+            var qg = stats.TopList.Alltime.Where(u => u.Username == userName);
+            var qc = stats.TopList.Canvas.Where(u => u.Username == userName);
+
+            string output = $"**Статистика для {msg.Author.Mention} :{Environment.NewLine}**";
+            output += $"`{"За весь час",-20}";
+            output += @$":{(qg.Any() ? $" Місце: {qg.First().Place,5} Пікселів: {qg.First().Pixels,7}" : "Замало пікселів для статистики. Ставте більше.")}`{Environment.NewLine}";
+            output += $"`{"За цей канвас",-20}";
+            output += @$":{(qc.Any() ? $" Місце: {qc.First().Place,5} Пікселів: {qc.First().Pixels,7}" : "Замало пікселів для статистики. Ставте більше.")}`{Environment.NewLine}";
+
+            await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+        }
+
+
+        private async Task StatsGlobalCmd(SocketMessage msg)
+        {
+#if DEBUG
+            Console.WriteLine("[DEBUG][PXLS] Entered StatsGlobalCmd.");
+#endif
+            //var words = msg.Content.Split(' ');
+            if (_moduleConfig.Stats.LastDownload < DateTime.UtcNow - TimeSpan.FromMinutes(15.0d))
+            {
+                await DownloadStatsJson().ConfigureAwait(false);
+            }
+            string statsJsonPath = Path.Combine(_modulePath, "stats.json");
+            StatsJson stats = null;
+            using (var fs = new FileStream(statsJsonPath, FileMode.Open, FileAccess.ReadWrite))
+            {
+                try
+                {
+                    stats = await JsonSerializer.DeserializeAsync<StatsJson>(fs);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EXCEPT][PXLS] {ex.Message}");
+                    Console.WriteLine($"[EXCEPT][PXLS] {ex.StackTrace}");
+                    throw;
+                }
+            }
+            var usersStrs = _moduleConfig.Stats.Users.Select(u => u.CanvasName);
+            var q = stats.TopList.Alltime.Where(u => usersStrs.Contains(u.Username));
+            foreach (var us in q)
+            {
+                var um = _moduleConfig.Stats.Users.First(um => um.CanvasName == us.Username);
+                um.GlobalCount = us.Pixels;
+                um.GlobalPlace = us.Place;
+            }
+
+            await SaveConfig().ConfigureAwait(false);
+
+            var users = new List<User>(_moduleConfig.Stats.Users);
+            /*users.OrderBy(u => u.GlobalPlace)*/;
+            var s = '\u2502';
+            string output = $"`{"Place",5}{s}{"Pixels",7}{s}{"Canvas Username",20} {s} {"Server name"}`{Environment.NewLine}";
+            var outputStrs = new List<string>();
+            
+            users.FindAll(u => u.GlobalPlace == 0).ForEach(u => u.GlobalPlace = 1001);
+            foreach(var user in users.OrderBy(u => u.GlobalPlace))
+            {
+                var uname = _guild.GetUser(user.UserId).Nickname ?? _guild.GetUser(user.UserId).Username;
+                var str = $"`{user.GlobalPlace,5}{s}{user.GlobalCount,7}{s}{user.CanvasName,20} {s} {uname}`{Environment.NewLine}";
+                if (str.Length + output.Length > 1000)
+                {
+                    outputStrs.Add(output);
+                    output = str;
+                }
+                else
+                {
+                    output += str;
+                }
+            }
+            outputStrs.Add(output);
+
+            string iconUrl = _guild.IconUrl;
+            var eba = new EmbedAuthorBuilder
+            {
+                Name = @"Shining Armor"
+                //, IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
+            };
+
+
+
+            var efob = new EmbedFooterBuilder
+            {
+                Text = "Мы в котле были в первую пиксельную."
+            };
+
+            var eb = new EmbedBuilder
+            {
+                Author = eba,
+                Color = Discord.Color.Green,
+                ThumbnailUrl = iconUrl,
+                Title = "Топ за весь час :",
+                Timestamp = DateTime.Now,
+                Footer = efob
+            };
+            
+            foreach (var str in outputStrs)
+            {
+                var efb = new EmbedFieldBuilder
+                {
+                    IsInline = false,
+                    Name = "Топ Укриччан :",
+                    Value = str
+                };
+                eb.Fields.Add(efb);
+            }
+
+            //var dm = await msg.Author.GetOrCreateDMChannelAsync();
+
+            await msg.Channel.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
+        }
+
+        private async Task StatsCanvasCmd(SocketMessage msg)
+        {
+#if DEBUG
+            Console.WriteLine("[DEBUG][PXLS] Entered StatsCanvasCmd.");
+#endif
+            //var words = msg.Content.Split(' ');
+            if (_moduleConfig.Stats.LastDownload < DateTime.UtcNow - TimeSpan.FromMinutes(15.0d))
+            {
+                await DownloadStatsJson().ConfigureAwait(false);
+            }
+            string statsJsonPath = Path.Combine(_modulePath, "stats.json");
+            StatsJson stats = null;
+            using (var fs = new FileStream(statsJsonPath, FileMode.Open, FileAccess.ReadWrite))
+            {
+                try
+                {
+                    stats = await JsonSerializer.DeserializeAsync<StatsJson>(fs);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EXCEPT][PXLS] {ex.Message}");
+                    Console.WriteLine($"[EXCEPT][PXLS] {ex.StackTrace}");
+                    throw;
+                }
+            }
+            var usersStrs = _moduleConfig.Stats.Users.Select(u => u.CanvasName);
+            var q = stats.TopList.Canvas.Where(u => usersStrs.Contains(u.Username));
+            foreach (var us in q)
+            {
+                var um = _moduleConfig.Stats.Users.First(um => um.CanvasName == us.Username);
+                um.CanvasCount = us.Pixels;
+                um.CanvasPlace = us.Place;
+            }
+
+            await SaveConfig().ConfigureAwait(false);
+
+            var users = new List<User>(_moduleConfig.Stats.Users);
+            //users.OrderByDescending(u => u.CanvasPlace);
+            var s = '\u2502';
+            string output = $"`{"Place",5}{s}{"Pixels",7}{s}{"Canvas Username",20} {s} {"Server name"}`{Environment.NewLine}";
+            var outputStrs = new List<string>();
+
+            users.FindAll(u => u.CanvasPlace == 0).ForEach(u => u.CanvasPlace = 1001);
+            foreach (var user in users.OrderBy(u => u.CanvasPlace))
+            {
+                var uname = _guild.GetUser(user.UserId).Nickname ?? _guild.GetUser(user.UserId).Username;
+                var str = $"`{user.CanvasPlace,5}{s}{user.CanvasCount,7}{s}{user.CanvasName,20} {s} {uname}`{Environment.NewLine}";
+                if (str.Length + output.Length > 1000)
+                {
+                    outputStrs.Add(output);
+                    output = str;
+                }
+                else
+                {
+                    output += str;
+                }
+            }
+            outputStrs.Add(output);
+
+            string iconUrl = _guild.IconUrl;
+            var eba = new EmbedAuthorBuilder
+            {
+                Name = @"Shining Armor"
+                //, IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
+            };
+
+            var efob = new EmbedFooterBuilder
+            {
+                Text = "Мы в котле были в первую пиксельную."
+            };
+
+            var eb = new EmbedBuilder
+            {
+                Author = eba,
+                Color = Discord.Color.Green,
+                ThumbnailUrl = iconUrl,
+                Title = "Топ канвасу :",
+                Timestamp = DateTime.Now,
+                Footer = efob
+            };
+
+            foreach (var str in outputStrs)
+            {
+                var efb = new EmbedFieldBuilder
+                {
+                    IsInline = false,
+                    Name = "Топ Укриччан :",
+                    Value = str
+                };
+                eb.Fields.Add(efb);
+            }
+
+            //var dm = await msg.Author.GetOrCreateDMChannelAsync();
+
+            await msg.Channel.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
+        }
+
+        private async Task DownloadStatsJson()
+        {
+            var uri = @"https://pxls.space/stats/stats.json";
+
+            //File.WriteAllText("stats.json", data);
+            //var stats = JsonSerializer.Deserialize<StatsJson>(data);
+            //foreach (var user in stats.TopList.Canvas)
+            //{
+            //    Console.WriteLine($"{user.Username} {user.Pixels} {user.Place}");
+            //}
+
+            string statsJsonPath = Path.Combine(_modulePath, "stats.json");
+
+            try
+            {
+                using var response = await _hc.GetAsync(Uri.UnescapeDataString($"{uri}")).ConfigureAwait(false);
+                using var cs = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                using (var fs = new FileStream(statsJsonPath, FileMode.Create, FileAccess.ReadWrite))
+                    await cs.CopyToAsync(fs).ConfigureAwait(false);
+
+                _moduleConfig.Stats.LastDownload = DateTime.UtcNow;
+                
+                await SaveConfig().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][PXLS] {ex.Message}");
+                Console.WriteLine($"[EXCEPT][PXLS] {ex.StackTrace}");
+                throw;
+            }
+        }
+
+        private async Task StatsCfgCmd(SocketMessage msg)
+        {
+#if DEBUG
+            Console.WriteLine("[DEBUG][PXLS] Entered StatsCfgCmd.");
+#endif
+            var words = msg.Content.Split(' ');
+            Regex userRegex = new Regex(@"^user:(?<userId>[0-9]+):(?<canvasName>[\w_-]+)");
+
+            foreach (var word in words)
+            {
+                if (word.StartsWith("interval:"))
+                {
+                    var intStr = word.Replace("interval:", String.Empty);
+                    if (Int32.TryParse(intStr, out int interval))
+                        _moduleConfig.Stats.Interval = interval;
+                    continue;
+                }
+                if (word.StartsWith("auto:"))
+                {
+                    var autoStr = word.Replace("auto:", String.Empty);
+                    if (Boolean.TryParse(autoStr, out bool auto))
+                        _moduleConfig.Stats.Auto = auto;
+                    continue;
+                }
+                if (word.StartsWith("channel:"))
+                {
+                    var channelStr = word.Replace("channel:", String.Empty);
+                    if (UInt64.TryParse(channelStr, out ulong channelId))
+                        _moduleConfig.Stats.ChannelId = channelId;
+                    continue;
+                }
+                if (word.StartsWith("deluser:"))
+                {
+                    var userStr = word.Replace("deluser:", String.Empty);
+                    IEnumerable<User> q;
+                    if (UInt64.TryParse(userStr, out ulong userId))
+                    {
+                        q = _moduleConfig.Stats.Users.Where(u => u.UserId == userId);
+                        if (q.Any())
+                        {
+                            var u = q.First();
+                            _moduleConfig.Stats.Users.Remove(u);
+                            continue;
+                        }
+                    }
+                    q = _moduleConfig.Stats.Users.Where(u => u.CanvasName == userStr);
+                    if (q.Any())
+                    {
+                        var u = q.First();
+                        _moduleConfig.Stats.Users.Remove(u);
+                        continue;
+                    }
+                }
+                if (userRegex.IsMatch(word))
+                {
+                    var userStr = userRegex.Match(word).Groups["userId"].Value;
+                    var canvasName = userRegex.Match(word).Groups["canvasName"].Value;
+                    if (UInt64.TryParse(userStr, out ulong userId))
+                    {
+                        _moduleConfig.Stats.Users.Add(new User() { UserId = userId, CanvasName = canvasName });
+                    }
+                    else
+                        continue;
+                }
+            }
+
+            await SaveConfig().ConfigureAwait(false);
+        }
+
+        private async Task AlertCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(' ');
+            if (words.Length == 1)
+                return;
+            var r = (msg.Author as SocketGuildUser).Roles.Select(r => r.Id);
+            if (!r.Contains(_pxlsOfficerId))
+                return;
+            switch (words[1]) 
+            {
+                case "on" when words.Length > 2:
+                    await AlertOnCmd(msg).ConfigureAwait(false);
+                    return;
+                case "off" when words.Length == 3:
+                    await AlertOffCmd(msg).ConfigureAwait(false);
+                    return;
+                case "cfg" when words.Length > 2:
+                    await AlertCfgCmd(msg).ConfigureAwait(false);
+                    return;
+            }
+        }
+
+        private async Task AlertCfgCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(' ');
+            foreach(var word in words)
+            {
+                if (word.StartsWith("interval:"))
+                {
+                    var intStr = word.Replace("interval:", String.Empty);
+                    if (Int32.TryParse(intStr, out int interval))
+                        _moduleConfig.Alerts.Interval = interval;
+                    else
+                        continue;
+                    _alertTimer.Stop();
+                    _alertTimer.Interval = interval * 60 * 1000;
+                    _alertTimer.Start();
+                }
+                if (word.StartsWith("channel:"))
+                {
+                    var intStr = word.Replace("channel:", String.Empty);
+                    if (UInt64.TryParse(intStr, out ulong channel))
+                        _moduleConfig.Alerts.ChannelId = channel;
+                    else
+                        continue;
+                }
+            }
+            // TODO : add channel permissions check
+            await SaveConfig().ConfigureAwait(false);
+        }
+
+        private async Task AlertOnCmd(SocketMessage msg)
+        {
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS] Entered AlertOnCmd.");
+#endif
+            var words = msg.Content.Split(' ');
+            var tName = words[2];
+            var q = _moduleConfig.Templates.Where(t => t.Name == tName);
+            if (!q.Any())
+                return;
+            var id = q.First().Id;
+            if (_moduleConfig.Alerts.TemplateIds.Contains(id))
+                return;
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS] Got id {id}");
+#endif
+
+            var ch = _guild.GetChannel(_moduleConfig.Alerts.ChannelId) as ISocketMessageChannel;
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS] Got channel {ch.Id}");
+            Console.WriteLine($"[DEBUG][PXLS] Got interval {_moduleConfig.Alerts.Interval}");
+#endif
+
+            await GetStatus(q.First().Url, ch, false).ConfigureAwait(false);
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS] GetStatusFinished.");
+#endif
+
+            _moduleConfig.Alerts.TemplateIds.Add(id);
+
+            await SaveConfig().ConfigureAwait(false);
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS] Config Saved.");
+#endif
+        }
+
+        private async Task AlertOffCmd(SocketMessage msg)
+        {
+            var words = msg.Content.Split(' ');
+            var tName = words[2];
+            var q = _moduleConfig.Templates.Where(t => t.Name == tName);
+            if (!q.Any())
+                return;
+            var id = q.First().Id;
+            if (!_moduleConfig.Alerts.TemplateIds.Contains(id))
+                return;
+            _moduleConfig.Alerts.TemplateIds.Remove(id);
+            
+            await SaveConfig().ConfigureAwait(false);
+        }
+
+        private async void AlertTimerElapsed(object o, ElapsedEventArgs e)
+        {
+            List<int> removeList = new List<int>();
+            var ch = _guild.GetChannel(_moduleConfig.Alerts.ChannelId) as ISocketMessageChannel;
+
+            foreach (var id in _moduleConfig.Alerts.TemplateIds)
+            {
+                var q = _moduleConfig.Templates.Where(t => t.Id == id);
+                if (!q.Any())
+                {
+                    removeList.Add(id);
+                    continue;
+                }
+                await GetStatus(q.First().Url, ch, false).ConfigureAwait(false);
+            }
+            foreach (var id in removeList)
+                _moduleConfig.Alerts.TemplateIds.Remove(id);
+        }
+
+        private async Task GetStatus(string inputUri, ISocketMessageChannel sc, bool cmd)
+        {
+            if (sc == null)
+                return;
+
+            if (!inputUri.StartsWith(@"https://pxls.space/#"))
+            {
+                var q = _moduleConfig.Templates.Where(t => t.Name == inputUri);
+                if (!q.Any())
+                    return;
+                inputUri = q.First().Url;
+            }
+
+            var templateRegex = new Regex(_templateRegexPattern, RegexOptions.Compiled);
+            var offsetxRegex = new Regex(_offsetxRegexPattern, RegexOptions.Compiled);
+            var offsetyRegex = new Regex(_offsetyRegexPattern, RegexOptions.Compiled);
+
+            var templateMatch = templateRegex.Match(inputUri);
+            var offsetxString = offsetxRegex.Match(inputUri).Groups[1].Value;
+            var offsetyString = offsetyRegex.Match(inputUri).Groups[1].Value;
+
+            if (!Uri.TryCreate(templateMatch.Groups["uri"].Value, UriKind.RelativeOrAbsolute, out Uri uri))
+#if DEBUG
+            {
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{templateMatch.Groups["uri"].Value}");
+                return;
+            }
+#else
+                return;
+#endif
+            var output = templateMatch.Groups["file"].Value;
+
+            if (String.IsNullOrEmpty(output) || String.IsNullOrWhiteSpace(output))
+#if DEBUG
+            {
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid output :{output}");
+                return;
+            }
+#else
+                return;
+#endif
+            if (!Int32.TryParse(offsetxString, out int offsetx))
+#if DEBUG
+            {
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsetx :{offsetxString}");
+                return;
+            }
+#else
+                return;
+#endif
+            if (!Int32.TryParse(offsetyString, out int offsety))
+#if DEBUG
+            {
+                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsety :{offsetxString}");
+                return;
+            }
+#else
+                return;
+#endif
+
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Checks passed.");
+#endif
+            string rawTemplatePath = Path.Combine(_modulePath, output);
+
+            try
+            {
+                using var response = await _hc.GetAsync(Uri.UnescapeDataString($"{uri}")).ConfigureAwait(false);
+                using var cs = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                using (var fs = new FileStream(rawTemplatePath, FileMode.Create, FileAccess.ReadWrite))
+                    await cs.CopyToAsync(fs).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Template downloaded.");
+#endif
+            SixLabors.ImageSharp.Image<Rgba32> template;
+            try
+            {
+                template = SixLabors.ImageSharp.Image.Load(Path.Combine(_modulePath, output)).CloneAs<Rgba32>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+
+            CanvasData canvasData;
+
+            try
+            {
+                canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Canvas data downloaded.");
+#endif
+
+            int symbolSize = GetTemplateSymbolSizeFromMetadata(template);
+            if (symbolSize == 0)
+                symbolSize = GetTemplateSymbolSize(template, canvasData.Palette.Values);
+            else
+                template[0, 0] = new Rgba32(template[0, 0].R, template[0, 0].G, template[0, 0].B, (template[0, 0].A > 128) ? 255 : 0);
+
+            using var img = Detemplatize(template, symbolSize, canvasData.Palette.Values);
+
+            string pngImagePath = Path.Combine(_modulePath, $"{output}.png");
+            try
+            {
+                using (var fs = new FileStream(pngImagePath, FileMode.Create, FileAccess.ReadWrite))
+                    img.SaveAsPng(fs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Image detemplatized.");
+#endif
+
+            int totalPxls = 0;
+            int wrongPxls = 0;
+
+            var transparent = new Rgba32(0, 0, 0, 0);
+
+            int xLow;
+            int xHigh;
+            int yLow;
+            int yHigh;
+
+            if (offsetx < 0)
+            {
+                xLow = -offsetx;
+                if (offsetx + img.Width < 0)
+                    return;
+                else if (offsetx + img.Width >= canvasData.Width)
+                    xHigh = img.Width - canvasData.Width + offsetx;
+                else
+                    xHigh = img.Width;
+            }
+            else if (offsetx >= canvasData.Width)
+            {
+                return;
+            }
+            else
+            {
+                xLow = 0;
+                if (offsetx + img.Width < canvasData.Width)
+                    xHigh = img.Width;
+                else
+                    xHigh = canvasData.Width - offsetx;
+            }
+
+            if (offsety < 0)
+            {
+                yLow = -offsety;
+                if (offsety + img.Height < 0)
+                    return;
+                else if (offsety + img.Height >= canvasData.Height)
+                    yHigh = img.Height - canvasData.Height + offsety;
+                else
+                    yHigh = img.Height;
+            }
+            else if (offsety >= canvasData.Height)
+                return;
+            else
+            {
+                yLow = 0;
+                if (offsety + img.Height < canvasData.Height)
+                    yHigh = img.Height;
+                else
+                    yHigh = canvasData.Height - offsety;
+            }
+
+            using var wrongMap = new Image<Rgba32>(Configuration.Default, xHigh - xLow, yHigh - yLow, Rgba32.Transparent);
+
+            for (int x = 0; x < xHigh - xLow; x++)
+            {
+                for (int y = 0; y < yHigh - yLow; y++)
+                {
+                    if (img[x + xLow, y + yLow] != transparent)
+                    {
+                        totalPxls++;
+                        if (canvasData[offsetx + x + xLow, offsety + y + yLow] != img[x + xLow, y + yLow])
+                        {
+                            wrongPxls++;
+                            wrongMap[x, y] = Rgba32.Red;
+                        }
+                    }
+                }
+            }
+
+            if (!cmd && wrongPxls == 0)
+                return;
+
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Wrongmap formed.");
+#endif
+
+            float amountC = 0.7f;
+            float amountT = 0.7f;
+            int border = 20;
+            using var res = canvasData.Canvas.Clone();
+
+            if (offsetx < 0)
+            {
+                xLow = 0;
+                if (wrongMap.Width + border >= canvasData.Width)
+                    xHigh = canvasData.Width;
+                else
+                    xHigh = wrongMap.Width + border;
+            }
+            else if (offsetx - border < 0)
+            {
+                xLow = 0;
+                if (wrongMap.Width + border + offsetx >= canvasData.Width)
+                    xHigh = canvasData.Width;
+                else
+                    xHigh = wrongMap.Width + border + offsetx;
+            }
+            else
+            {
+                xLow = offsetx - border;
+                if (wrongMap.Width + border + offsetx >= canvasData.Width)
+                    xHigh = border - offsetx + canvasData.Width;
+                else
+                    xHigh = 2 * border + wrongMap.Width;
+            }
+
+            if (offsety < 0)
+            {
+                yLow = 0;
+                if (wrongMap.Height + border >= canvasData.Height)
+                    yHigh = canvasData.Height;
+                else
+                    yHigh = wrongMap.Height + border;
+            }
+            else if (offsety - border < 0)
+            {
+                yLow = 0;
+                if (wrongMap.Height + border + offsety >= canvasData.Height)
+                    yHigh = canvasData.Height;
+                else
+                    yHigh = wrongMap.Height + border + offsety;
+            }
+            else
+            {
+                yLow = offsety - border;
+                if (wrongMap.Height + border + offsety >= canvasData.Height)
+                    yHigh = border - offsety + canvasData.Height;
+                else
+                    yHigh = 2 * border + wrongMap.Height;
+            }
+
+            var newSize = (xHigh > yHigh) ? new Size(800, (int)(yHigh * 800f / xHigh)) : new Size((int)(xHigh * 800f / yHigh), 800);
+            var resampler = (xHigh > yHigh) ? ((xHigh > 800) ? KnownResamplers.Bicubic : KnownResamplers.NearestNeighbor) :
+                (yHigh > 800) ? KnownResamplers.Bicubic : KnownResamplers.NearestNeighbor;
+
+            GraphicsOptions go = new GraphicsOptions { ColorBlendingMode = PixelColorBlendingMode.Subtract, BlendPercentage = amountT };
+            ResizeOptions ro = new ResizeOptions { Mode = ResizeMode.Stretch, Position = AnchorPositionMode.Center, Sampler = resampler, Size = newSize };
+
+            res.Mutate(
+                o =>
+                    o.Brightness(amountC)
+                    .DrawImage(img, new Point(offsetx, offsety), go)
+                    .DrawImage(wrongMap, new Point((offsetx < 0) ? 0 : offsetx, (offsety < 0) ? 0 : offsety), 1.0f)
+                    .Crop(new Rectangle(xLow, yLow, xHigh, yHigh))
+                    .Resize(ro)
+            );
+
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Wrongmap image processed and formed.");
+#endif
+            string wrongMapFilePath = Path.Combine(_modulePath, $"{output}_wrongmap.png");
+
+            try
+            {
+                using (var fs = new FileStream(wrongMapFilePath, FileMode.Create, FileAccess.ReadWrite))
+                    res.SaveAsPng(fs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Wrongmap image saved.");
+#endif
+            try
+            {
+                string outMsg = $"```{wrongPxls} incorrect from {totalPxls} total.{Environment.NewLine}Percent done : {100 - 100f * wrongPxls / totalPxls}```";
+                await sc.SendMessageAsync(outMsg).ConfigureAwait(false);
+                await sc.SendFileAsync(wrongMapFilePath).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Message and image sent.");
+#endif
+            try
+            {
+                File.Delete(rawTemplatePath);
+                File.Delete(pngImagePath);
+                File.Delete(wrongMapFilePath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                return;
+            }
+#if DEBUG
+            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Temp files deleted.");
+#endif
         }
 
         private async Task HelpCmd(SocketMessage msg)
@@ -270,18 +1167,22 @@ namespace CozyBot
                     IsInline = false,
                     Name = "Команди піксельного модуля",
                     Value =
-                        _prefix + @"status [посилання на шаблон] - стан виконання шаблону за посиланням" + Environment.NewLine +
-                        _prefix + @"palette list - список палітр" + Environment.NewLine +
-                        _prefix + @"palette add [назва палітри] [файл палітри] - додати палітру" + Environment.NewLine +
-                        _prefix + @"palette get [назва палітри] ?[text|file] - отримати палітру у вигляді тексту або файлу" + Environment.NewLine +
-                        _prefix + @"palette del [назва палітри] - видалити палітру" + Environment.NewLine +
-                        _prefix + @"template list - список шаблонів" + Environment.NewLine +
-                        _prefix + @"template add [назва шаблону] [посилання на шаблон] - додати шаблон" + Environment.NewLine +
-                        _prefix + @"template del [назва шаблону] - видалити шаблон" + Environment.NewLine +
-                        _prefix + @"template get [назва шаблону] - отримати шаблон та метадані" + Environment.NewLine +
-                        _prefix + @"template detempl [пікча|посилання] ?[назва палітри] - отримати зображення з шаблона" + Environment.NewLine +
-                        _prefix + @"template make [пікча|посилання] ?dotted ?[назва палітри] - отримати шаблон з зображення" + Environment.NewLine +
-                        _prefix + @"help - цей список команд"
+                        "`" + _prefix + @"status [посилання на шаблон|назва шаблону]` - стан виконання шаблону за посиланням" + Environment.NewLine +
+                        "`" + _prefix + @"palette list` - список палітр" + Environment.NewLine +
+                        "`" + _prefix + @"palette add [назва палітри] [файл палітри]` - додати палітру" + Environment.NewLine +
+                        "`" + _prefix + @"palette get [назва палітри] ?[text|file]` - отримати палітру у вигляді тексту або файлу" + Environment.NewLine +
+                        "`" + _prefix + @"palette del [назва палітри]` - видалити палітру" + Environment.NewLine +
+                        "`" + _prefix + @"template list` - список шаблонів" + Environment.NewLine +
+                        "`" + _prefix + @"template add [назва шаблону]` [посилання на шаблон] - додати шаблон" + Environment.NewLine +
+                        "`" + _prefix + @"template del [назва шаблону]` - видалити шаблон" + Environment.NewLine +
+                        "`" + _prefix + @"template get [назва шаблону]` - отримати шаблон та метадані" + Environment.NewLine +
+                        "`" + _prefix + @"template detempl [пікча|посилання] ?[назва палітри]` - отримати зображення з шаблона" + Environment.NewLine +
+                        "`" + _prefix + @"template make [пікча|посилання] ?dotted ?[назва палітри]` - отримати шаблон з зображення" + Environment.NewLine +
+                        "`" + _prefix + @"stats ?[m|me]` - ваша статистика" + Environment.NewLine +
+                        "`" + _prefix + @"stats [g|gl|glob|global]` - статистика за весь час" + Environment.NewLine +
+                        "`" + _prefix + @"stats [c|can|canv|canvas]` - статистика за цей канвас" + Environment.NewLine +
+                        " " + @"**Якщо вас нема в статистиці - звертайтесь до Піксельних Офіцерів.**" + Environment.NewLine +
+                        "`" + _prefix + @"help` - цей список команд"
                 };
 
                 var efob = new EmbedFooterBuilder
@@ -301,13 +1202,13 @@ namespace CozyBot
 
                 eb.Fields.Add(efb);
 
-                var dm = await msg.Author.GetOrCreateDMChannelAsync();
+                //var dm = await msg.Author.GetOrCreateDMChannelAsync();
 
-                await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
+                await msg.Channel.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
-                string output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
+                //string output = msg.Author.Mention + " подивись в приватні повідомлення " + EmojiCodes.Bumagi;
 
-                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+                //await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
 
 
             }
@@ -605,6 +1506,8 @@ namespace CozyBot
             {
                 return;
             }
+            var r = (msg.Author as SocketGuildUser).Roles.Select(r => r.Id);
+
             if (words.Length > 1)
             {
                 switch (words[1])
@@ -613,9 +1516,13 @@ namespace CozyBot
                         await TemplateListCmd(msg).ConfigureAwait(false);
                         return;
                     case "add" when words.Length > 3:
-                        await TemplateAddCmd(msg).ConfigureAwait(false);
+                        //if (!r.Contains(_pxlsOfficerId))
+                        //    return;
+                        //await TemplateAddCmd(msg).ConfigureAwait(false);
                         return;
                     case "del" when words.Length == 3:
+                        if (!r.Contains(_pxlsOfficerId))
+                            return;
                         await TemplateDelCmd(msg).ConfigureAwait(false);
                         return;
                     case "get":
@@ -1031,25 +1938,56 @@ namespace CozyBot
             var words = msg.Content.Split(" ");
             var name = words[2];
             var q = _moduleConfig.Templates.Where(t => t.Name == name);
-            if (q.Any())
-            {
-                var t = q.First();
-                string output = String.Empty;
-                output += $@"`Template {name} info:`" + Environment.NewLine;
-                output += Environment.NewLine;
-                output += $@"`Id : {t.Id}`" + Environment.NewLine;
-                output += $@"`Name : {t.Name}`" + Environment.NewLine;
-                output += $@"`URL : `{t.Url}" + Environment.NewLine;
-                output += $@"`Image URL : `{t.SourceUrl}" + Environment.NewLine;
-                output += $@"`Added by : {t.AddedBy}`" + Environment.NewLine;
-                // TODO : Implement Palette ID
-                output += $@"`Palette ID : {"Not implemented"}`" + Environment.NewLine;
-                await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
-            }
-            else
+            if (!q.Any())
             {
                 await msg.Channel.SendMessageAsync("Specified template not found.").ConfigureAwait(false);
+                return;
             }
+            var t = q.First();
+            string output = String.Empty;
+            output += $@"`Template {name} info:`" + Environment.NewLine;
+            output += Environment.NewLine;
+            output += $@"`Id : {t.Id}`" + Environment.NewLine;
+            output += $@"`Name : {t.Name}`" + Environment.NewLine;
+            output += $@"`URL : `{t.Url}" + Environment.NewLine;
+            output += $@"`Image URL : `{t.SourceUrl}" + Environment.NewLine;
+            output += $@"`Added by : {t.AddedBy}`" + Environment.NewLine;
+            // TODO : Implement Palette ID
+            output += $@"`Palette ID : {"Not implemented"}`" + Environment.NewLine;
+
+            var guild = (msg.Author as SocketGuildUser).Guild;
+            string iconUrl = guild.IconUrl;
+            var eba = new EmbedAuthorBuilder
+            {
+                Name = @"Shining Armor"
+                //, IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
+            };
+
+            var efb = new EmbedFieldBuilder
+            {
+                IsInline = false,
+                Name = $"{name}",
+                Value = output
+            };
+
+            var efob = new EmbedFooterBuilder
+            {
+                Text = "Мы в котле были в первую пиксельную."
+            };
+
+            var eb = new EmbedBuilder
+            {
+                Author = eba,
+                Color = Discord.Color.Green,
+                ThumbnailUrl = iconUrl,
+                Title = "Шаблон :",
+                Timestamp = DateTime.Now,
+                Footer = efob
+            };
+
+            eb.Fields.Add(efb);
+            
+            await msg.Channel.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
         }
         private async Task TemplateDelCmd(SocketMessage msg)
         {
@@ -1162,6 +2100,7 @@ namespace CozyBot
             {
                 return;
             }
+            var r = (msg.Author as SocketGuildUser).Roles.Select(r => r.Id);
 
             switch (words[1])
             {
@@ -1169,12 +2108,16 @@ namespace CozyBot
                     await PaletteListCmd(msg).ConfigureAwait(false);
                     return;
                 case "add" when words.Length > 2:
+                    if (!r.Contains(_pxlsOfficerId))
+                        return;
                     await PaletteAddCmd(msg).ConfigureAwait(false);
                     break;
                 case "get" when words.Length > 2:
                     await PaletteGetCmd(msg).ConfigureAwait(false);
                     break;
                 case "del" when words.Length == 3:
+                    if (!r.Contains(_pxlsOfficerId))
+                        return; 
                     await PaletteDelCmd(msg).ConfigureAwait(false);
                     break;
                 default:
@@ -1335,7 +2278,9 @@ namespace CozyBot
                 }
             }
             else if (msg.Attachments.Count == 0)
-            { }
+            { 
+                // fisting is 300 bucks
+            }
             else
                 return;
         }
@@ -1344,6 +2289,15 @@ namespace CozyBot
         {
             try
             {
+#if DEBUG
+                Console.WriteLine($"[DEBUG][PXLS] SaveConfig Triggered.");
+                Console.WriteLine($"[DEBUG][PXLS] _moduleConfig.Stats is null: {_moduleConfig.Stats == null}");
+                if (_moduleConfig.Stats != null)
+                {
+                    Console.WriteLine($"[DEBUG][PXLS] _moduleConfig.ChannelId: {_moduleConfig.Stats.ChannelId}");
+                    Console.WriteLine($"[DEBUG][PXLS] _moduleConfig.Interval: {_moduleConfig.Stats.Interval}");
+                }
+#endif
                 var bytes = JsonSerializer.SerializeToUtf8Bytes<PxlsAlertsModuleConfig>(_moduleConfig, new JsonSerializerOptions() { WriteIndented = true });
                 await File.WriteAllBytesAsync(_moduleConfigFilePath, bytes).ConfigureAwait(false);
             }
@@ -1404,333 +2358,24 @@ namespace CozyBot
 #endif
             string[] words = msg.Content.Split(" ");
             string inputUri = words[1];
-
-
 #if DEBUG
             Console.WriteLine($"[DEBUG][PXLS-ALERTS] words[1] :{words[1]}");
 #endif
-            if (!inputUri.StartsWith(@"https://pxls.space/#"))
-                return;
+            await GetStatus(inputUri, msg.Channel, true);
+        }
 
-            var templateRegex = new Regex(_templateRegexPattern, RegexOptions.Compiled);
-            var offsetxRegex = new Regex(_offsetxRegexPattern, RegexOptions.Compiled);
-            var offsetyRegex = new Regex(_offsetyRegexPattern, RegexOptions.Compiled);
-            
-            var templateMatch = templateRegex.Match(inputUri);
-            var offsetxString = offsetxRegex.Match(inputUri).Groups[1].Value;
-            var offsetyString = offsetyRegex.Match(inputUri).Groups[1].Value;
-
-            if (!Uri.TryCreate(templateMatch.Groups["uri"].Value, UriKind.RelativeOrAbsolute, out Uri uri))
-#if DEBUG
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
             {
-                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid uri :{templateMatch.Groups["uri"].Value}");
-                return;
+                _alertTimer.Stop();
+                _alertTimer.Dispose();
             }
-#else
-                return;
-#endif
-            var output = templateMatch.Groups["file"].Value;
-            
-            if (String.IsNullOrEmpty(output) || String.IsNullOrWhiteSpace(output))
-#if DEBUG
-            {
-                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid output :{output}");
-                return;
-            }
-#else
-                return;
-#endif
-            if (!Int32.TryParse(offsetxString, out int offsetx))
-#if DEBUG
-            {
-                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsetx :{offsetxString}");
-                return;
-            }
-#else
-                return;
-#endif
-            if (!Int32.TryParse(offsetyString, out int offsety))
-#if DEBUG
-            {
-                Console.WriteLine($"[DEBUG][PXLS-ALERTS] Invalid offsety :{offsetxString}");
-                return;
-            }
-#else
-                return;
-#endif
-
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Checks passed.");
-#endif
-            string rawTemplatePath = Path.Combine(_modulePath, output);
-
-            try
-            {
-                using var response = await _hc.GetAsync(Uri.UnescapeDataString($"{uri}"));
-                using var cs = await response.Content.ReadAsStreamAsync();
-                using (var fs = new FileStream(rawTemplatePath, FileMode.Create, FileAccess.ReadWrite))
-                    await cs.CopyToAsync(fs).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                return;
-            }
-
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Template downloaded.");
-#endif
-            SixLabors.ImageSharp.Image<Rgba32> template;
-            try
-            {
-                template = SixLabors.ImageSharp.Image.Load(Path.Combine(_modulePath, output)).CloneAs<Rgba32>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                return;
-            }
-
-            CanvasData canvasData;
-
-            try
-            {
-                canvasData = await GetCanvasData(_infoDataUrl, _boardDataUrl);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                return;
-            }
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Canvas data downloaded.");
-#endif
-
-            int symbolSize = GetTemplateSymbolSizeFromMetadata(template);
-            if (symbolSize == 0)
-                symbolSize = GetTemplateSymbolSize(template, canvasData.Palette.Values);
-            else
-                template[0, 0] = new Rgba32(template[0, 0].R, template[0, 0].G, template[0, 0].B, (template[0, 0].A > 128) ? 255 : 0);
-
-            using var img = Detemplatize(template, symbolSize, canvasData.Palette.Values);
-            
-            string pngImagePath = Path.Combine(_modulePath, $"{output}.png");
-            try
-            {
-                using (var fs = new FileStream(pngImagePath, FileMode.Create, FileAccess.ReadWrite))
-                    img.SaveAsPng(fs);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                return;
-            }
-
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Image detemplatized.");
-#endif
-
-            int totalPxls = 0;
-            int wrongPxls = 0;
-
-            var transparent = new Rgba32(0, 0, 0, 0);
-
-            int xLow;
-            int xHigh;
-            int yLow;
-            int yHigh;
-
-            if (offsetx < 0)
-            {
-                xLow = -offsetx;
-                if (offsetx + img.Width < 0)
-                    return;
-                else if (offsetx + img.Width >= canvasData.Width)
-                    xHigh = img.Width - canvasData.Width + offsetx;
-                else
-                    xHigh = img.Width;
-            }
-            else if (offsetx >= canvasData.Width)
-            {
-                return;
-            }
-            else
-            {
-                xLow = 0;
-                if (offsetx + img.Width < canvasData.Width)
-                    xHigh = img.Width;
-                else
-                    xHigh = canvasData.Width - offsetx;
-            }
-
-            if (offsety < 0)
-            {
-                yLow = -offsety;
-                if (offsety + img.Height < 0)
-                    return;
-                else if (offsety + img.Height >= canvasData.Height)
-                    yHigh = img.Height - canvasData.Height + offsety;
-                else
-                    yHigh = img.Height;
-            }
-            else if (offsety >= canvasData.Height)
-                return;
-            else
-            {
-                yLow = 0;
-                if (offsety + img.Height < canvasData.Height)
-                    yHigh = img.Height;
-                else
-                    yHigh = canvasData.Height - offsety;
-            }
-
-            using var wrongMap = new Image<Rgba32>(Configuration.Default, xHigh - xLow, yHigh - yLow, Rgba32.Transparent);
-
-            for (int x = 0; x < xHigh - xLow; x++)
-            {
-                for (int y = 0; y < yHigh - yLow; y++)
-                {
-                    if (img[x + xLow, y + yLow] != transparent)
-                    {
-                        totalPxls++;
-                        if (canvasData[offsetx + x + xLow, offsety + y + yLow] != img[x + xLow, y + yLow])
-                        {
-                            wrongPxls++;
-                            wrongMap[x, y] = Rgba32.Red;
-                        }
-                    }
-                }
-            }
-
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Wrongmap formed.");
-#endif
-
-            float amountC = 0.7f;
-            float amountT = 0.7f;
-            int border = 20;
-            using var res = canvasData.Canvas.Clone();
-
-            if (offsetx < 0)
-            {
-                xLow = 0;
-                if (wrongMap.Width + border >= canvasData.Width)
-                    xHigh = canvasData.Width;
-                else
-                    xHigh = wrongMap.Width + border;
-            }
-            else if (offsetx - border < 0)
-            {
-                xLow = 0;
-                if (wrongMap.Width + border + offsetx >= canvasData.Width)
-                    xHigh = canvasData.Width;
-                else
-                    xHigh = wrongMap.Width + border + offsetx;
-            }
-            else
-            {
-                xLow = offsetx - border;
-                if (wrongMap.Width + border + offsetx >= canvasData.Width)
-                    xHigh = border - offsetx + canvasData.Width;
-                else
-                    xHigh = 2 * border + wrongMap.Width;
-            }
-
-            if (offsety < 0)
-            {
-                yLow = 0;
-                if (wrongMap.Height + border >= canvasData.Height)
-                    yHigh = canvasData.Height;
-                else
-                    yHigh = wrongMap.Height + border;
-            }
-            else if (offsety - border < 0)
-            {
-                yLow = 0;
-                if (wrongMap.Height + border + offsety >= canvasData.Height)
-                    yHigh = canvasData.Height;
-                else
-                    yHigh = wrongMap.Height + border + offsety;
-            }
-            else
-            {
-                yLow = offsety - border;
-                if (wrongMap.Height + border + offsety >= canvasData.Height)
-                    yHigh = border - offsety + canvasData.Height;
-                else
-                    yHigh = 2 * border + wrongMap.Height;
-            }
-
-            var newSize = (xHigh > yHigh) ? new Size(800, (int)(yHigh * 800f / xHigh)) : new Size((int)(xHigh * 800f / yHigh), 800);
-            var resampler = (xHigh > yHigh) ? ((xHigh > 800) ? KnownResamplers.Bicubic : KnownResamplers.NearestNeighbor) :
-                (yHigh > 800) ? KnownResamplers.Bicubic : KnownResamplers.NearestNeighbor;
-
-            GraphicsOptions go = new GraphicsOptions { ColorBlendingMode = PixelColorBlendingMode.Subtract, BlendPercentage = amountT };
-            ResizeOptions ro = new ResizeOptions { Mode = ResizeMode.Stretch, Position = AnchorPositionMode.Center, Sampler = resampler, Size = newSize };
-
-            res.Mutate(
-                o =>
-                    o.Brightness(amountC)
-                    .DrawImage(img, new Point(offsetx, offsety), go)
-                    .DrawImage(wrongMap, new Point((offsetx < 0) ? 0 : offsetx, (offsety < 0) ? 0 : offsety), 1.0f)
-                    .Crop(new Rectangle(xLow, yLow, xHigh, yHigh))
-                    .Resize(ro)
-            );
-
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Wrongmap image processed and formed.");
-#endif
-            string wrongMapFilePath = Path.Combine(_modulePath, $"{output}_wrongmap.png");
-
-            try
-            {
-                using (var fs = new FileStream(wrongMapFilePath, FileMode.Create, FileAccess.ReadWrite))
-                    res.SaveAsPng(fs);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                return;
-            }
-
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Wrongmap image saved.");
-#endif
-            try
-            {
-                string outMsg = $"```{wrongPxls} incorrect from {totalPxls} total.{Environment.NewLine}Percent done : {100 - 100f * wrongPxls / totalPxls}```";
-                await msg.Channel.SendMessageAsync(outMsg).ConfigureAwait(false);
-                await msg.Channel.SendFileAsync(wrongMapFilePath).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                return;
-            }
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Message and image sent.");
-#endif
-            try
-            {
-                File.Delete(rawTemplatePath);
-                File.Delete(pngImagePath);
-                File.Delete(wrongMapFilePath);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                return;
-            }
-#if DEBUG
-            Console.WriteLine($"[DEBUG][PXLS-ALERTS] Temp files deleted.");
-#endif
+        }
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         static async Task<CanvasData> GetCanvasData(string infoUri, string boardUri)
@@ -1913,15 +2558,102 @@ namespace CozyBot
         public string AddedBy { get; set; }
     }
 
-    public struct PxlsAlertsModuleConfig
+    public class Alerts
+    {
+        [JsonPropertyName("channelid")]
+        public ulong ChannelId { get; set; }
+        [JsonPropertyName("interval")]
+        public int Interval { get; set; }
+        [JsonPropertyName("templateids")]
+        public List<int> TemplateIds { get; set; }
+        public Alerts()
+        {
+            TemplateIds = new List<int>();
+        }
+    }
+
+    public class Stats
+    {
+        [JsonPropertyName("channelid")]
+        public ulong ChannelId { get; set; }
+        [JsonPropertyName("interval")]
+        public int Interval { get; set; }
+        [JsonPropertyName("auto")]
+        public bool Auto { get; set; }
+        [JsonPropertyName("users")]
+        public List<User> Users { get; set; }
+        [JsonPropertyName("lastdownload")]
+        public DateTime LastDownload { get; set; }
+
+        public Stats()
+        {
+            Users = new List<User>();
+        }
+    }
+
+    public class User
+    {
+        [JsonPropertyName("userid")]
+        public ulong UserId { get; set; }
+        [JsonPropertyName("canvasname")]
+        public string CanvasName { get; set; }
+        [JsonPropertyName("globalcount")]
+        public int GlobalCount { get; set; }
+        [JsonPropertyName("canvascount")]
+        public int CanvasCount { get; set; }
+        [JsonPropertyName("globalplace")]
+        public int GlobalPlace { get; set; }
+        [JsonPropertyName("canvasplace")]
+        public int CanvasPlace { get; set; }
+        [JsonPropertyName("canvasprevcount")]
+        public int CanvasPreviousCount { get; set; }
+    }
+
+    public class PxlsAlertsModuleConfig
     { 
         [JsonPropertyName("palettes")]
         public List<Palette> Palettes { get; set; }
         [JsonPropertyName("templates")]
         public List<Template> Templates { get; set; }
+        [JsonPropertyName("alerts")]
+        public Alerts Alerts { get; set; }
+        [JsonPropertyName("stats")]
+        public Stats Stats { get; set; }
+        [JsonExtensionData]
+        public Dictionary<string, object> ExtensionData { get; set; }
+        public PxlsAlertsModuleConfig()
+        {
+            Alerts = new Alerts();
+            Stats = new Stats();
+            Palettes = new List<Palette>();
+            Templates = new List<Template>();
+            ExtensionData = new Dictionary<string, object>();
+        }
+    }
 
+    public class StatsJsonUser
+    {
+        [JsonPropertyName("username")]
+        public string Username { get; set; }
+        [JsonPropertyName("pixels")]
+        public int Pixels { get; set; }
+        [JsonPropertyName("place")]
+        public int Place { get; set; }
+    }
+
+    public class TopListJson
+    {
+        [JsonPropertyName("alltime")]
+        public List<StatsJsonUser> Alltime { get; set; }
+        [JsonPropertyName("canvas")]
+        public List<StatsJsonUser> Canvas { get; set; }
+    }
+
+    public class StatsJson
+    {
+        [JsonPropertyName("toplist")]
+        public TopListJson TopList { get; set; }
         [JsonExtensionData]
         public Dictionary<string, object> ExtensionData { get; set; }
     }
-
 }
