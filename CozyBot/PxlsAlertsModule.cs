@@ -100,6 +100,7 @@ namespace CozyBot
             _guildPath = Guard.NonNullWhitespaceEmpty(guildPath, nameof(guildPath));
             _adminIds = adminIds;
             _alertTimer = new Timer();
+            _alertTimer.Elapsed += AlertTimerElapsed;
 
             if (_configEl.Element(ModuleXmlName) == null)
             {
@@ -178,8 +179,10 @@ namespace CozyBot
                 Console.WriteLine($"[DEBUG][PXLS] TemplateIds Any(): {_moduleConfig.Alerts.TemplateIds.Any()}");
 #endif
             }
+
+            if (_alertTimer.Enabled)
+                _alertTimer.Enabled = false;
             _alertTimer.Interval = _moduleConfig.Alerts.Interval * 60000;
-            _alertTimer.Elapsed += AlertTimerElapsed;
             _alertTimer.AutoReset = true;
             _alertTimer.Start();
         }
@@ -1516,9 +1519,9 @@ namespace CozyBot
                         await TemplateListCmd(msg).ConfigureAwait(false);
                         return;
                     case "add" when words.Length > 3:
-                        //if (!r.Contains(_pxlsOfficerId))
-                        //    return;
-                        //await TemplateAddCmd(msg).ConfigureAwait(false);
+                        if (!r.Contains(_pxlsOfficerId))
+                            return;
+                        await TemplateAddCmd(msg).ConfigureAwait(false);
                         return;
                     case "del" when words.Length == 3:
                         if (!r.Contains(_pxlsOfficerId))

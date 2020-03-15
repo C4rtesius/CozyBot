@@ -3,10 +3,13 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
+using Discord;
 using Discord.WebSocket;
 
 namespace CozyBot
@@ -254,10 +257,218 @@ namespace CozyBot
                     RuleGenerator.PrefixatedCommand(_prefix, "limbo") &
                     RuleGenerator.UserByID(_superUserID),
                     LimboCommand
-                    )
+                    ),
+                new BotCommand(
+                    "emojistatscmd",
+                    RuleGenerator.PrefixatedCommand(_prefix, "emojistats") &
+                    RuleGenerator.RoleByID(455287765995618304u), // VV
+                    EmojiStatsCmd
+                    )       
             };
         }
         
+        private async Task EmojiStatsCmd(SocketMessage msg)
+        {
+            try
+            {
+                var sw = new System.Diagnostics.Stopwatch();
+                sw.Start();
+
+                var emotes = _guild.Emotes;
+                var emojiStrings = emotes.Select(e => $"{e}");
+                var channels = _guild.TextChannels;
+
+                var timestamp = DateTime.UtcNow;
+                var timeDiff = TimeSpan.FromDays(60.0d);
+                var timeBoundary = timestamp - timeDiff;
+
+                var emoteTextDict = new Dictionary<string, int>();
+                var emoteReacDict = new Dictionary<IEmote, int>();
+                var emoteTextDictLock = new object();
+                var emoteReacDictLock = new object();
+
+                foreach (var e in emojiStrings)
+                {
+                    emoteTextDict.TryAdd(e, 0);
+                }
+                foreach (var e in emotes)
+                {
+                    emoteReacDict.TryAdd(e, 0);
+                }
+
+                int qs = 0;
+                int qe = 0; // reactions
+
+                foreach (var ch in channels)
+                {
+#if DEBUG
+                    //await msg.Channel.SendMessageAsync($"Started {ch.Mention}.").ConfigureAwait(false);
+#endif
+                    IMessage lastMsg = null;
+
+                    int q = 0;
+
+                    var asyncMessages = ch.GetMessagesAsync();
+                    var enumerator = asyncMessages.GetEnumerator();
+                    var msgList = new List<IMessage>();
+                    try
+                    {
+                        while (await enumerator.MoveNext().ConfigureAwait(false))
+                        {
+                            foreach (var message in enumerator.Current)
+                            {
+                                msgList.Add(message);
+                                lastMsg = message;
+                            }
+#if DEBUG
+                            Console.WriteLine($"[DEBUG][GUILDBOT] Downloaded {msgList.Count} messages.");
+#endif
+
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : \n{ex.Message}\n{ex.StackTrace}");
+                        continue;
+                    }
+
+                    int listCount;
+                    while (lastMsg.Timestamp > timeBoundary)
+                    {
+                        listCount = msgList.Count;
+                        asyncMessages = ch.GetMessagesAsync(lastMsg, Direction.Before);
+                        enumerator = asyncMessages.GetEnumerator();
+                        //if (!await asyncMessages.Any().ConfigureAwait(false))
+                        //    break;
+                        while (await enumerator.MoveNext().ConfigureAwait(false))
+                        {
+                            foreach (var message in enumerator.Current)
+                            {
+                                msgList.Add(message);
+                                lastMsg = message;
+                            }
+                        }
+#if DEBUG
+                        Console.WriteLine($"[DEBUG][GUILDBOT] Downloaded {msgList.Count} messages.");
+#endif
+                        if (msgList.Count == listCount)
+                        {
+                            break;
+                        }
+                    }
+
+                    //await msg.Channel.SendMessageAsync($"Downloaded {msgList.Count} messages from {ch.Mention}.").ConfigureAwait(false);
+
+                    int threads = 20;
+                    int count = msgList.Count / threads;
+                    int residue = msgList.Count % threads;
+                    List<List<IMessage>> splitList = new List<List<IMessage>>();
+                    int curCount;
+                    int j = 0;
+                    for (int i = 0; i < threads; i++)
+                    {
+                        curCount = (i < residue) ? count + 1 : count;
+                        splitList.Add(msgList.GetRange(j, curCount));
+                        j += curCount;
+                    }
+
+
+                    List<Task> tasklist = new List<Task>();
+
+                    foreach (var messagesPerCore in splitList)
+                    {
+                        tasklist.Add(
+                            Task.Run(
+                                async () =>
+                                {
+                                    try
+                                    {
+                                        foreach (var message in messagesPerCore)
+                                        {
+                                            if (message is IUserMessage um)
+                                            {
+                                                foreach (var r in um.Reactions)
+                                                {
+                                                    if (emoteReacDict.ContainsKey(r.Key))
+                                                    {
+                                                        lock (emoteReacDictLock)
+                                                        {
+                                                            emoteReacDict[r.Key] += r.Value.ReactionCount;
+                                                        }
+                                                        Interlocked.Add(ref qe, r.Value.ReactionCount);
+                                                    }
+                                                }
+                                            }
+
+                                            foreach (var e in emoteTextDict.Keys.ToList())
+                                            {
+                                                int n = (message.Content.Length - message.Content.Replace(e, "").Length) / e.Length;
+                                                lock (emoteTextDictLock)
+                                                {
+                                                    emoteTextDict[e] += n;
+                                                }
+                                                Interlocked.Add(ref qe, n);
+                                            }
+                                            Interlocked.Increment(ref q);
+                                            //if (q % 1000 == 0)
+                                            //{
+                                            //    try
+                                            //    {
+                                            //        await msg.Channel.SendMessageAsync($"Processed {q} messages from {msgList.Count}.").ConfigureAwait(false);
+                                            //    }
+                                            //}
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"[EXCEPT][GUILDBOT] Processing Messages failed : {ch.Name}\n{ex.Message}\n{ex.StackTrace}");
+                                        throw;
+                                    }
+                                }
+                            )
+                        );
+                    }
+
+                    await Task.WhenAll(tasklist).ConfigureAwait(false);
+
+                    //await msg.Channel.SendMessageAsync($"Processed {q} messages in {ch.Mention}.\nTotal {qe} emoji found.").ConfigureAwait(false);
+                    qs += q;
+                }
+
+
+                var emoteTotlDict = new Dictionary<Discord.IEmote, int>(emoteReacDict);
+                foreach (var e in emoteTotlDict.Keys.ToList())
+                {
+                    emoteTotlDict[e] += emoteTextDict[$"{e}"];
+                }
+                var outputs = new List<string>();
+                var str = $"**=== Emoji Usage Stats ===**\n\n`{"Emoji",4} \u2502 {"Total",10} \u2502 {"Reactions",10} \u2502 {"Text",10}`\n";
+
+                foreach (var e in emoteTotlDict.OrderByDescending(kvp => kvp.Value))
+                {
+                    str += $"{e.Key,4}`   \u2502 {e.Value,10} \u2502 {emoteReacDict[e.Key],10} \u2502 {emoteTextDict[$"{e.Key}"],10}` {Environment.NewLine}";
+                    if (str.Length > 1900)
+                    {
+                        outputs.Add(str);
+                        str = String.Empty;
+                    }
+                }
+                outputs.Add(str);
+
+                foreach (var output in outputs)
+                {
+                    await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+                }
+                await msg.Channel.SendMessageAsync($"Total time spent : {sw.Elapsed}").ConfigureAwait(false);
+                sw.Stop();
+            } 
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : \n{ex.Message}\n{ex.StackTrace}");
+                throw;
+            }
+        }
+
         private async Task LimboCommand(SocketMessage msg)
         {
             var sw = new System.Diagnostics.Stopwatch();
