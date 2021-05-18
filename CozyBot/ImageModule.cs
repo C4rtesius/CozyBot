@@ -73,7 +73,7 @@ namespace CozyBot
             "add",
             "list",
             // verbose list not implemented yet
-            //"vlist",   
+            //"vlist",
             "help",
             "cfg",
             "del"
@@ -230,7 +230,7 @@ namespace CozyBot
 
             //List<ulong> allPerms = new List<ulong>(_adminIds);
             //allPerms.AddRange(perms);
-            //Rule addRule = RuleGenerator.HasRoleByIds(allPerms) & 
+            //Rule addRule = RuleGenerator.HasRoleByIds(allPerms) &
             //    (
             //        RuleGenerator.TextIdentity(_prefix) &
             //        RuleGenerator.HasImage
@@ -265,7 +265,7 @@ namespace CozyBot
         //            {
         //                // TODO : Implement logging/exception handling
         //            }
-                    
+
         //            // More than one image is unsupported
 
         //            break;

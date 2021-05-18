@@ -56,58 +56,34 @@ namespace CozyBot
 
         protected event CtrlEventHandler CtrlEvent
         {
-            add
-            {
-                if (value != null)
-                {
-                    _ctrlEvent += value;
-                }
-            }
-            remove
-            {
-                if (value != null)
-                {
-                    _ctrlEvent -= value;
-                }
-            }
+            add     { if (value != null) _ctrlEvent += value; }
+            remove  { if (value != null) _ctrlEvent -= value; }
         }
 
         protected SocketGuild _guild;
 
         public Dictionary<string, IBotModule> ModulesDict
         {
-            get
-            {
-                return _modulesDict;
-            }
+            get { return _modulesDict; }
         }
 
         public GuildBot(SocketGuild guild, string guildPath, ulong clientId)
         {
             _guild = guild ?? throw new NullReferenceException("Guild cannot be null!");
-
             _guildPath = guildPath ?? throw new ArgumentNullException("configPath cannot be null");
-
             _configPath = Path.Combine(_guildPath, "config.xml");
-
             _clientId = clientId;
 
             if (!File.Exists(_configPath))
-            {
                 throw new ApplicationException("Invalid configPath, file does not exist.");
-            }
 
             _adminIds = new List<ulong>();
 
             LoadConfig();
 
             foreach (var role in guild.Roles)
-            {
                 if (role.Permissions.Administrator)
-                {
                     _adminIds.Add(role.Id);
-                }
-            }
 
             _modulesDict = new Dictionary<string, IBotModule>();
 
@@ -119,23 +95,16 @@ namespace CozyBot
         public void Dispatch(SocketMessage msg)
         {
             foreach (var module in _modulesDict.Values)
-            {
                 foreach (var cmd in module.ActiveCommands)
-                {
                     if (cmd.CanExecute(msg))
                     {
                         cmd.ExecuteCommand(msg);
                         return;
                     }
-                }
-            }
+
             foreach (var cmd in _commandsList)
-            {
                 if (cmd.CanExecute(msg))
-                {
                     cmd.ExecuteCommand(msg);
-                }
-            }
         }
 
         public void OnCtrlEvent(CtrlType type)
@@ -144,7 +113,6 @@ namespace CozyBot
 
             Task.Run(() => SaveConfig()).GetAwaiter().GetResult();
         }
-
 
         private void LoadConfig()
         {
@@ -158,27 +126,18 @@ namespace CozyBot
             }
 #endif
             using (var stream = File.Open(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-            {
                 _config = XDocument.Load(stream);
-            }
 
             if (_config.Root.Name != "guildbotconfig")
-            {
                 throw new ApplicationException("Configuration file not found.");
-            }
 
             XElement prefixEl = _config.Root.Element("coreprefix");
             if (prefixEl == null)
-            {
                 throw new ApplicationException("Configuration file is missing prefix data.");
-            }
-            if (prefixEl.Value == String.Empty)
-            {
+            if (String.IsNullOrEmpty(prefixEl.Value))
                 throw new ApplicationException("Configuration file is missing prefix data.");
-            }
 
             _prefix = prefixEl.Value;
-
         }
 
         private void LoadModules()
@@ -200,28 +159,28 @@ namespace CozyBot
                     imageModule.GuildBotConfigChanged += ImageModule_ConfigChanged;
                 }
 
-                if (modulesEl.Element("archive") != null)
-                {
-                    ArchiveModule archiveModule = new ArchiveModule(modulesEl, _adminIds, _guildPath, _guild);
-                    _modulesDict.Add(archiveModule.StringID, archiveModule);
-                    archiveModule.GuildBotConfigChanged += ArchiveModule_ConfigChanged;
-                    CtrlEvent += archiveModule.OnCtrlEvent;
-                }
-                if (modulesEl.Element("pxls-alerts") != null)
-                {
-                    PxlsAlertsModule pxlsModule = new PxlsAlertsModule(modulesEl, _adminIds, _guild, _guildPath);
-                    _modulesDict.Add(pxlsModule.StringID, pxlsModule);
-                    //pxlsModule.GuildBotConfigChanged +=
-                }
-                if (modulesEl.Element("music") != null)
-                {
-                    MusicModule musicModule = new MusicModule(modulesEl, _adminIds, _guild, _guildPath);
-                    _modulesDict.Add(musicModule.StringID, musicModule);
-                    //pxlsModule.GuildBotConfigChanged +=
-                }
+                // Turned off as of 18.05.2021
+                //if (modulesEl.Element("archive") != null)
+                //{
+                //    ArchiveModule archiveModule = new ArchiveModule(modulesEl, _adminIds, _guildPath, _guild);
+                //    _modulesDict.Add(archiveModule.StringID, archiveModule);
+                //    archiveModule.GuildBotConfigChanged += ArchiveModule_ConfigChanged;
+                //    CtrlEvent += archiveModule.OnCtrlEvent;
+                //}
+                //if (modulesEl.Element("pxls-alerts") != null)
+                //{
+                //    PxlsAlertsModule pxlsModule = new PxlsAlertsModule(modulesEl, _adminIds, _guild, _guildPath);
+                //    _modulesDict.Add(pxlsModule.StringID, pxlsModule);
+                //    //pxlsModule.GuildBotConfigChanged +=
+                //}
+                //if (modulesEl.Element("music") != null)
+                //{
+                //    MusicModule musicModule = new MusicModule(modulesEl, _adminIds, _guild, _guildPath);
+                //    _modulesDict.Add(musicModule.StringID, musicModule);
+                //    //pxlsModule.GuildBotConfigChanged +=
+                //}
             }
         }
-
 
         private void LoadDefaultCommands()
         {
@@ -263,10 +222,10 @@ namespace CozyBot
                     RuleGenerator.PrefixatedCommand(_prefix, "emojistats") &
                     RuleGenerator.RoleByID(455287765995618304u), // VV
                     EmojiStatsCmd
-                    )       
+                    )
             };
         }
-        
+
         private async Task EmojiStatsCmd(SocketMessage msg)
         {
             try
@@ -288,22 +247,15 @@ namespace CozyBot
                 var emoteReacDictLock = new object();
 
                 foreach (var e in emojiStrings)
-                {
                     emoteTextDict.TryAdd(e, 0);
-                }
                 foreach (var e in emotes)
-                {
                     emoteReacDict.TryAdd(e, 0);
-                }
 
                 int qs = 0;
                 int qe = 0; // reactions
 
                 foreach (var ch in channels)
                 {
-#if DEBUG
-                    //await msg.Channel.SendMessageAsync($"Started {ch.Mention}.").ConfigureAwait(false);
-#endif
                     IMessage lastMsg = null;
 
                     int q = 0;
@@ -320,10 +272,6 @@ namespace CozyBot
                                 msgList.Add(message);
                                 lastMsg = message;
                             }
-#if DEBUG
-                            Console.WriteLine($"[DEBUG][GUILDBOT] Downloaded {msgList.Count} messages.");
-#endif
-
                         }
                     }
                     catch (Exception ex)
@@ -341,20 +289,16 @@ namespace CozyBot
                         //if (!await asyncMessages.Any().ConfigureAwait(false))
                         //    break;
                         while (await enumerator.MoveNext().ConfigureAwait(false))
-                        {
                             foreach (var message in enumerator.Current)
                             {
                                 msgList.Add(message);
                                 lastMsg = message;
                             }
-                        }
 #if DEBUG
                         Console.WriteLine($"[DEBUG][GUILDBOT] Downloaded {msgList.Count} messages.");
 #endif
                         if (msgList.Count == listCount)
-                        {
                             break;
-                        }
                     }
 
                     //await msg.Channel.SendMessageAsync($"Downloaded {msgList.Count} messages from {ch.Mention}.").ConfigureAwait(false);
@@ -372,7 +316,6 @@ namespace CozyBot
                         j += curCount;
                     }
 
-
                     List<Task> tasklist = new List<Task>();
 
                     foreach (var messagesPerCore in splitList)
@@ -386,19 +329,13 @@ namespace CozyBot
                                         foreach (var message in messagesPerCore)
                                         {
                                             if (message is IUserMessage um)
-                                            {
                                                 foreach (var r in um.Reactions)
-                                                {
                                                     if (emoteReacDict.ContainsKey(r.Key))
                                                     {
                                                         lock (emoteReacDictLock)
-                                                        {
                                                             emoteReacDict[r.Key] += r.Value.ReactionCount;
-                                                        }
                                                         Interlocked.Add(ref qe, r.Value.ReactionCount);
                                                     }
-                                                }
-                                            }
 
                                             foreach (var e in emoteTextDict.Keys.ToList())
                                             {
@@ -410,13 +347,6 @@ namespace CozyBot
                                                 Interlocked.Add(ref qe, n);
                                             }
                                             Interlocked.Increment(ref q);
-                                            //if (q % 1000 == 0)
-                                            //{
-                                            //    try
-                                            //    {
-                                            //        await msg.Channel.SendMessageAsync($"Processed {q} messages from {msgList.Count}.").ConfigureAwait(false);
-                                            //    }
-                                            //}
                                         }
                                     }
                                     catch (Exception ex)
@@ -431,16 +361,12 @@ namespace CozyBot
 
                     await Task.WhenAll(tasklist).ConfigureAwait(false);
 
-                    //await msg.Channel.SendMessageAsync($"Processed {q} messages in {ch.Mention}.\nTotal {qe} emoji found.").ConfigureAwait(false);
                     qs += q;
                 }
 
-
                 var emoteTotlDict = new Dictionary<Discord.IEmote, int>(emoteReacDict);
                 foreach (var e in emoteTotlDict.Keys.ToList())
-                {
                     emoteTotlDict[e] += emoteTextDict[$"{e}"];
-                }
                 var outputs = new List<string>();
                 var str = $"**=== Emoji Usage Stats ===**\n\n`{"Emoji",4} \u2502 {"Total",10} \u2502 {"Reactions",10} \u2502 {"Text",10}`\n";
 
@@ -456,12 +382,10 @@ namespace CozyBot
                 outputs.Add(str);
 
                 foreach (var output in outputs)
-                {
                     await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
-                }
                 await msg.Channel.SendMessageAsync($"Total time spent : {sw.Elapsed}").ConfigureAwait(false);
                 sw.Stop();
-            } 
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : \n{ex.Message}\n{ex.StackTrace}");
@@ -566,7 +490,6 @@ namespace CozyBot
                         try
                         {
                             while (await enumerator.MoveNext().ConfigureAwait(false))
-                            {
                                 foreach (var message in enumerator.Current)
                                 {
                                     var usrId = message.Author.Id;
@@ -575,7 +498,6 @@ namespace CozyBot
                                     lastMsg = message;
                                     q++;
                                 }
-                            }
                         }
                         catch (Exception ex)
                         {
@@ -588,7 +510,6 @@ namespace CozyBot
                 }
             }
 
-//#if DEBUG
             List<string> msgStrs = new List<string>();
             var messageStr = String.Empty;
             foreach (var userId in passiveDict.Keys)
@@ -601,12 +522,9 @@ namespace CozyBot
                 messageStr += $"{_guild.GetUser(userId).Mention} ";
             }
             msgStrs.Add(messageStr);
-            
+
             foreach (var str in msgStrs)
-            {
                 await msg.Channel.SendMessageAsync(str).ConfigureAwait(false);
-            }
-//#endif
             sw.Stop();
             await msg.Channel.SendMessageAsync($"Left {passiveDict.Count} users.\nProcessed {qs} messages in {sw.Elapsed.TotalSeconds} seconds.").ConfigureAwait(false);
         }
@@ -616,9 +534,7 @@ namespace CozyBot
             await Task.Run(
                 () => {
                     lock (_configLockObject)
-                    {
                        _config.Save(_configPath);
-                    }
                 }
             ).ConfigureAwait(false);
         }
@@ -644,13 +560,9 @@ namespace CozyBot
             int res = rng.Next(10);
             string reply = String.Empty;
             if (res > 4)
-            {
                 reply += "Так " + EmojiCodes.Pizdec;
-            }
             else
-            {
                 reply += "Ні " + EmojiCodes.Pizdec;
-            }
             await msg.Channel.SendMessageAsync(reply).ConfigureAwait(false);
         }
 
@@ -682,27 +594,17 @@ namespace CozyBot
                         {
                             num = diceNumR;
                             if (Int32.TryParse(diceGroups["dicesize"].Value, out int diceSizeR))
-                            {
                                 size = diceSizeR;
-                            }
                             else
-                            {
                                 return;
-                            }
                         }
                         else
-                        {
                             return;
-                        }
                     }
                     else if (Int32.TryParse(words[1], out int diceSizeI))
-                    {
                         size = diceSizeI;
-                    }
                     else
-                    {
                         return;
-                    }
                     break;
                 case 3:
                     if (Int32.TryParse(words[1], out int diceNum))
@@ -710,35 +612,23 @@ namespace CozyBot
                         num = diceNum;
 
                         if (Int32.TryParse(words[2], out int diceSize))
-                        {
                             size = diceSize;
-                        }
                         else
-                        {
                             return;
-                        }
                     }
                     else
-                    {
                         return;
-                    }
-
                     break;
                 default:
                     return;
             }
 
             if (size == 0 || num == 0)
-            {
                 return;
-            }
 
             Random rng = new Random(DateTime.Now.Millisecond);
             for (int i = 0; i < num; i++)
-            {
-
                 result += (ulong)rng.Next(1, size + 1);
-            }
 
             await msg.Channel.SendMessageAsync("Ви заролили : " + result + " " + EmojiCodes.Pizdec).ConfigureAwait(false);
         }
@@ -754,9 +644,7 @@ namespace CozyBot
             string[] words = msgContent.Split(" ");
 
             if (words.Length < 2)
-            {
                 return;
-            }
 
             switch (words[1])
             {
@@ -776,9 +664,7 @@ namespace CozyBot
         private async Task ModulesCommand(string[] words, SocketMessage msg)
         {
             if (words.Length < 3)
-            {
                 return;
-            }
 
             switch (words[2])
             {
@@ -790,25 +676,19 @@ namespace CozyBot
                     }
                     string output = @"Список підключених модулів :" + Environment.NewLine + @"```";
                     foreach (var kvp in _modulesDict)
-                    {
                         output += kvp.Key + " " + (kvp.Value.IsActive ? "включений" : "виключений") + Environment.NewLine;
-                    }
                     output += @"```";
 
                     await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
                     break;
                 case "on":
                     if (words.Length < 4)
-                    {
                         return;
-                    }
                     await ChangeModulesState(words, true, msg).ConfigureAwait(false);
                     break;
                 case "off":
                     if (words.Length < 4)
-                    {
                         return;
-                    }
                     await ChangeModulesState(words, false, msg).ConfigureAwait(false);
                     break;
                 default:
@@ -821,35 +701,23 @@ namespace CozyBot
             List<string> modulesToProcess = new List<string>();
 
             for (int i = 3; i < words.Length; i++)
-            {
                 modulesToProcess.Add(words[i]);
-            }
 
             IEnumerable<XElement> modulesElList = _config.Root.Element("modules").Elements();
 
             List<string> modulesProcessed = new List<string>();
 
             foreach (var moduleStringID in _modulesDict.Keys)
-            {
                 if (modulesToProcess.Contains(moduleStringID))
-                {
                     foreach (var moduleEl in modulesElList)
-                    {
                         if (moduleEl.Name.ToString() == _modulesDict[moduleStringID].ModuleXmlName)
-                        {
                             if (Boolean.TryParse(moduleEl.Attribute("on").Value, out bool state))
                             {
                                 if (state == newState)
-                                {
                                     continue;
-                                }
                                 moduleEl.Attribute("on").Value = newState.ToString();
                                 modulesProcessed.Add(moduleStringID);
                             }
-                        }
-                    }
-                }
-            }
 
             if (modulesProcessed.Count > 0)
             {
@@ -869,10 +737,7 @@ namespace CozyBot
                 await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
             }
             else
-            {
                 await msg.Channel.SendMessageAsync(@"Нічого не було змінено " + EmojiCodes.Thonk).ConfigureAwait(false);
-            }
         }
-
     }
 }

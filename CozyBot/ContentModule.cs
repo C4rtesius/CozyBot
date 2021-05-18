@@ -190,8 +190,8 @@ namespace CozyBot
         /// <param name="clientId">ID of Bot.</param>
         /// <param name="guildPath">Guild path.</param>
         public ContentModule(
-            XElement configEl, 
-            List<ulong> adminIds, 
+            XElement configEl,
+            List<ulong> adminIds,
             ulong clientId,
             string guildPath
             )
@@ -214,7 +214,7 @@ namespace CozyBot
 
                 _configEl.Add(moduleConfigEl);
             }
-            
+
             _guildPath = Guard.NonNullWhitespaceEmpty(guildPath, nameof(guildPath));
 
             if (!Directory.Exists(_guildPath))
@@ -516,7 +516,7 @@ namespace CozyBot
         /// <param name="prev">Previous prefix.</param>
         /// <returns>List of strings - valid prefixes for commands.</returns>
         protected virtual List<string> RPKeyListGenerator(
-            XElement el, 
+            XElement el,
             string prev,
             bool includeItems
         )
@@ -717,7 +717,7 @@ namespace CozyBot
                 DeleteItemRecursively(parentEl);
                 el.Remove();
             }
-            //if (   (parentEl.Element("item") == null) 
+            //if (   (parentEl.Element("item") == null)
             //    && (parentEl.Element("key ") == null)
             //    && (parentEl.Name != _moduleXmlName))
             //{
