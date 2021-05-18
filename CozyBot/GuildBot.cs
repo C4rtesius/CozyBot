@@ -737,7 +737,7 @@ namespace CozyBot
             for (int i = 0; i < num; i++)
             {
 
-                result += (ulong)rng.Next(1, size);
+                result += (ulong)rng.Next(1, size + 1);
             }
 
             await msg.Channel.SendMessageAsync("Ви заролили : " + result + " " + EmojiCodes.Pizdec).ConfigureAwait(false);
