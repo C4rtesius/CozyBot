@@ -73,7 +73,7 @@ namespace CozyBot
 
         private async Task UserJoined(SocketGuildUser user)
         {
-            if (user.Username.ToLower().Contains(@"twitter.com\h", System.StringComparison.InvariantCulture))
+            if (user.Username.ToLower().Contains(@"twitter.com/h", System.StringComparison.InvariantCulture))
                 try { await user.BanAsync(0, "Bot").ConfigureAwait(false); }
                 catch { }
         }
@@ -179,20 +179,13 @@ namespace CozyBot
                 throw new ApplicationException("Configuration file not found.");
 
             XElement tokenEl = _config.Root.Element("token");
-            if (tokenEl == null)
+            if (tokenEl == null || String.IsNullOrEmpty(tokenEl.Value))
                 throw new ApplicationException("Configuration file is missing token data.");
-            if (String.IsNullOrEmpty(tokenEl.Value))
-                throw new ApplicationException("Configuration file is missing token data.");
-
             _token = tokenEl.Value;
 
-
             XElement prefixEl = _config.Root.Element("coreprefix");
-            if (prefixEl == null)
+            if (prefixEl == null || String.IsNullOrEmpty(prefixEl.Value))
                 throw new ApplicationException("Configuration file is missing prefix data.");
-            if (String.IsNullOrEmpty(prefixEl.Value))
-                throw new ApplicationException("Configuration file is missing prefix data.");
-
             _prefix = prefixEl.Value;
         }
 
