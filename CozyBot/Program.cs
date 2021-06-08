@@ -57,6 +57,7 @@ namespace CozyBot
                 AppDomain.CurrentDomain.ProcessExit += (o, e) => OnCtrlEvent(CtrlType.CTRL_C_EVENT);
 
                 _client.MessageReceived += MessageReceived;
+                _client.UserJoined += UserJoined;
 
                 _mre.WaitOne();
             }
@@ -69,6 +70,13 @@ namespace CozyBot
         }
 
         // Private methods section
+
+        private async Task UserJoined(SocketGuildUser user)
+        {
+            if (user.Username.ToLower().Contains(@"twitter.com\h", System.StringComparison.InvariantCulture))
+                try { await user.BanAsync(0, "Bot").ConfigureAwait(false); }
+                catch { }
+        }
 
         private void OnCtrlEvent(CtrlType type)
         {
@@ -182,7 +190,7 @@ namespace CozyBot
             XElement prefixEl = _config.Root.Element("coreprefix");
             if (prefixEl == null)
                 throw new ApplicationException("Configuration file is missing prefix data.");
-            if (String.IsNullOrEmpty(String.Empty))
+            if (String.IsNullOrEmpty(prefixEl.Value))
                 throw new ApplicationException("Configuration file is missing prefix data.");
 
             _prefix = prefixEl.Value;
