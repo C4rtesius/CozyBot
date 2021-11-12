@@ -19,7 +19,7 @@ namespace CozyBot
 
         private static string _stringID = "ArchiveModule";
         private static string _moduleXmlName = "archive";
-        private static string _listFormat = 
+        private static string _listFormat =
             "`{0,-25}Timer: {1,-6}Interval: {2,-6}Image: {3,-6}Last: {4,-20}Silent: {5,-6}`" + Environment.NewLine;
 
         private string _workingPath;
@@ -287,7 +287,7 @@ namespace CozyBot
                     }
                     else
                     {
-                        // if timer exists in config but not in _timers 
+                        // if timer exists in config but not in _timers
                         // create and run timer
 
                         //config new timer
@@ -317,7 +317,7 @@ namespace CozyBot
                     if (_timersDict.TryGetValue(acp.Id, out Timer timer))
                     {
                         // When timer exists in _timers and not in config
-                        // stop and destroy timer 
+                        // stop and destroy timer
                         try
                         {
                             timer.Stop();
@@ -835,11 +835,11 @@ namespace CozyBot
 
                 //nickname = message.Author.Username;
                 //newString = String.Format("[{0}] : {1} : {2}", message.Timestamp, nickname, message.Content);
-                    
+
                 await sw.WriteLineAsync(
-                    $"[{message.Timestamp}] : {message.Author.Username} : {message.Content}"       
+                    $"[{message.Timestamp}] : {message.Author.Username} : {message.Content}"
                 );
-                    
+
                 lines++;
             }
             return lines;
@@ -869,7 +869,6 @@ namespace CozyBot
             }
 
             using HttpClient hc = new HttpClient();
-            
             List<Task> tasklist = new List<Task>();
 
             foreach (var messagesPerCore in splitList)
@@ -909,21 +908,20 @@ namespace CozyBot
         {
             List<IMessage> list = new List<IMessage>();
 
-            var asyncMessages = textChannel.GetMessagesAsync();
-            var enumerator = asyncMessages.GetEnumerator();
             try
             {
-                while (await enumerator.MoveNext())
-                {
-                    foreach (var message in enumerator.Current)
+                await foreach (var messages in textChannel.GetMessagesAsync())
+                    foreach (var message in messages)
                     {
                         list.Add(message);
                     }
-                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[EXCEPT][ARCHIVEMODULE] Fetch Messages failed : {textChannel.Name}");
+                Console.WriteLine(String.Join($"[EXCEPT][ARCHIVEMODULE] Fetch Messages failed : {textChannel.Name}\n",
+                                              $"Exception catched: {ex.Message}\n",
+                                              $"Stack trace: {ex.StackTrace}"));
+
                 throw;
             }
 
@@ -934,32 +932,20 @@ namespace CozyBot
         {
             List<IMessage> list = new List<IMessage>();
 
-            var asyncMessages = textChannel.GetMessagesAsync(from, direction);
-            var enumerator = asyncMessages.GetEnumerator();
-
-            // 23.04.2019
-            // There exists a bug (?!) when enumerator stumbles upon 
-            // osu! spectator invite (finished ?), it throws an exception and
-            // everything breaks.
-            // Cannot/do not want to reproduce it atm.
-            // 24.09.2019
-            // No idea if that bug still persists.
-            // TODO : looks like this section needs rewriting/refactoring
-
             try
             {
-                while (await enumerator.MoveNext())
-                {
-                    foreach (var message in enumerator.Current)
+                await foreach(var messages in textChannel.GetMessagesAsync(from, direction))
+                    foreach (var message in messages)
                     {
                         list.Add(message);
                     }
-                }
             }
             catch (Exception ex)
             {
-                //Console.WriteLine(textChannel.Name);
-                throw ex;
+                Console.WriteLine(String.Join($"[EXCEPT][ARCHIVEMODULE] Fetch Messages failed : {textChannel.Name}\n",
+                                              $"Exception catched: {ex.Message}\n",
+                                              $"Stack trace: {ex.StackTrace}"));
+                throw;
             }
             return list;
         }
@@ -1081,7 +1067,6 @@ namespace CozyBot
                         }
                     }
                 }
-               
             }
 
             await RaiseConfigChanged(_configEl).ConfigureAwait(false);

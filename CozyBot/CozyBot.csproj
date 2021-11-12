@@ -14,6 +14,7 @@
     <None Remove="publish-Debug.tar.xz" />
     <None Remove="publish-Release.tar" />
     <None Remove="publish-Release.tar.xz" />
+    <None Remove="publish-remote.bat" />
     <None Remove="publish-remote_2.bat" />
     <None Remove="publish.bat" />
     <None Remove="remote.txt" />
@@ -26,11 +27,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Discord.Net" Version="2.1.1" />
+    <PackageReference Include="Discord.Net" Version="2.4.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.8">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="SixLabors.Core" Version="1.0.0-beta0008" />
     <PackageReference Include="SixLabors.ImageSharp" Version="1.0.0-beta0007" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0-beta0007" />

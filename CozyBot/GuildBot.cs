@@ -186,43 +186,26 @@ namespace CozyBot
         {
             _commandsList = new List<IBotCommand>()
             {
-                new BotCommand(
-                    "pingcmd",
-                    RuleGenerator.PrefixatedCommand(_prefix, "ping"),
-                    PingCommand),
-                new BotCommand(
-                    "ctrlcmd",
-                    RuleGenerator.PrefixatedCommand(_prefix, "ctrl") &
-                    RuleGenerator.UserByID(_superUserID),
-                    CtrlCommand
-                    ),
-                new BotCommand(
-                    "rollcmd",
-                    RuleGenerator.PrefixatedCommand(_prefix, "roll"),
-                    RollCommand
-                    ),
-                new BotCommand(
-                    "yesnocmd",
-                    RuleGenerator.PrefixatedCommand(_prefix, "yesno"),
-                    BinaryChoiceCommand
-                    ),
-                new BotCommand(
-                    "magic8ballcmd",
-                    RuleGenerator.PrefixatedCommand(_prefix, "8ball"),
-                    Magic8BallCommand
-                    ),
-                new BotCommand(
-                    "limbocmd",
-                    RuleGenerator.PrefixatedCommand(_prefix, "limbo") &
-                    RuleGenerator.UserByID(_superUserID),
-                    LimboCommand
-                    ),
-                new BotCommand(
-                    "emojistatscmd",
-                    RuleGenerator.PrefixatedCommand(_prefix, "emojistats") &
-                    RuleGenerator.RoleByID(455287765995618304u), // VV
-                    EmojiStatsCmd
-                    )
+                new BotCommand("pingcmd",
+                               RuleGenerator.PrefixatedCommand(_prefix, "ping"),
+                               PingCommand),
+                new BotCommand("ctrlcmd",
+                               RuleGenerator.PrefixatedCommand(_prefix, "ctrl") &
+                               RuleGenerator.UserByID(_superUserID),
+                               CtrlCommand),
+                new BotCommand("rollcmd",
+                               RuleGenerator.PrefixatedCommand(_prefix, "roll"),
+                               RollCommand),
+                new BotCommand("yesnocmd",
+                               RuleGenerator.PrefixatedCommand(_prefix, "yesno"),
+                               BinaryChoiceCommand),
+                new BotCommand("magic8ballcmd",
+                               RuleGenerator.PrefixatedCommand(_prefix, "8ball"),
+                               Magic8BallCommand),
+                new BotCommand("emojistatscmd",
+                               RuleGenerator.PrefixatedCommand(_prefix, "emojistats") &
+                               RuleGenerator.RoleByID(455287765995618304u), // VV
+                               EmojiStatsCmd)
             };
         }
 
@@ -251,49 +234,51 @@ namespace CozyBot
                 foreach (var e in emotes)
                     emoteReacDict.TryAdd(e, 0);
 
-                int qs = 0;
-                int qe = 0; // reactions
-
-                foreach (var ch in channels)
+                foreach (var textChannel in channels)
                 {
                     IMessage lastMsg = null;
 
                     int q = 0;
 
-                    var asyncMessages = ch.GetMessagesAsync();
-                    var enumerator = asyncMessages.GetEnumerator();
+                    var asyncMessages = textChannel.GetMessagesAsync();
                     var msgList = new List<IMessage>();
                     try
                     {
-                        while (await enumerator.MoveNext().ConfigureAwait(false))
-                        {
-                            foreach (var message in enumerator.Current)
+                        await foreach (var messages in asyncMessages)
+                            foreach (var message in messages)
                             {
                                 msgList.Add(message);
                                 lastMsg = message;
                             }
-                        }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : \n{ex.Message}\n{ex.StackTrace}");
+                        Console.WriteLine(String.Join($"[EXCEPT][GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}\n",
+                                                      $"Exception catched: {ex.Message}\n",
+                                                      $"Stack trace: {ex.StackTrace}"));
                         continue;
                     }
 
                     int listCount;
                     while (lastMsg.Timestamp > timeBoundary)
                     {
-                        listCount = msgList.Count;
-                        asyncMessages = ch.GetMessagesAsync(lastMsg, Direction.Before);
-                        enumerator = asyncMessages.GetEnumerator();
-                        //if (!await asyncMessages.Any().ConfigureAwait(false))
-                        //    break;
-                        while (await enumerator.MoveNext().ConfigureAwait(false))
-                            foreach (var message in enumerator.Current)
-                            {
-                                msgList.Add(message);
-                                lastMsg = message;
-                            }
+                        try
+                        {
+                            listCount = msgList.Count;
+                            await foreach (var messages in textChannel.GetMessagesAsync(lastMsg, Direction.Before))
+                                foreach (var message in messages)
+                                {
+                                    msgList.Add(message);
+                                    lastMsg = message;
+                                }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(String.Join($"[EXCEPT][GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}\n",
+                                                          $"Exception catched: {ex.Message}\n",
+                                                          $"Stack trace: {ex.StackTrace}"));
+                            continue;
+                        }
 #if DEBUG
                         Console.WriteLine($"[DEBUG][GUILDBOT] Downloaded {msgList.Count} messages.");
 #endif
@@ -301,9 +286,9 @@ namespace CozyBot
                             break;
                     }
 
-                    //await msg.Channel.SendMessageAsync($"Downloaded {msgList.Count} messages from {ch.Mention}.").ConfigureAwait(false);
+                    int threads = Environment.ProcessorCount;
+                    threads = (threads == 1) ? 1 : threads - 1;
 
-                    int threads = 20;
                     int count = msgList.Count / threads;
                     int residue = msgList.Count % threads;
                     List<List<IMessage>> splitList = new List<List<IMessage>>();
@@ -322,36 +307,32 @@ namespace CozyBot
                     {
                         tasklist.Add(
                             Task.Run(
-                                async () =>
+                                () =>
                                 {
                                     try
                                     {
                                         foreach (var message in messagesPerCore)
                                         {
                                             if (message is IUserMessage um)
-                                                foreach (var r in um.Reactions)
-                                                    if (emoteReacDict.ContainsKey(r.Key))
+                                                foreach (var reaction in um.Reactions)
+                                                    if (emoteReacDict.ContainsKey(reaction.Key))
                                                     {
                                                         lock (emoteReacDictLock)
-                                                            emoteReacDict[r.Key] += r.Value.ReactionCount;
-                                                        Interlocked.Add(ref qe, r.Value.ReactionCount);
+                                                            emoteReacDict[reaction.Key] += reaction.Value.ReactionCount;
                                                     }
 
-                                            foreach (var e in emoteTextDict.Keys.ToList())
+                                            foreach (var emote in emoteTextDict.Keys.ToList())
                                             {
-                                                int n = (message.Content.Length - message.Content.Replace(e, "").Length) / e.Length;
+                                                int n = (message.Content.Length - message.Content.Replace(emote, String.Empty).Length) / emote.Length;
                                                 lock (emoteTextDictLock)
-                                                {
-                                                    emoteTextDict[e] += n;
-                                                }
-                                                Interlocked.Add(ref qe, n);
+                                                    emoteTextDict[emote] += n;
                                             }
                                             Interlocked.Increment(ref q);
                                         }
                                     }
                                     catch (Exception ex)
                                     {
-                                        Console.WriteLine($"[EXCEPT][GUILDBOT] Processing Messages failed : {ch.Name}\n{ex.Message}\n{ex.StackTrace}");
+                                        Console.WriteLine($"[EXCEPT][GUILDBOT] Processing Messages failed : {textChannel.Name}\n{ex.Message}\n{ex.StackTrace}");
                                         throw;
                                     }
                                 }
@@ -360,19 +341,17 @@ namespace CozyBot
                     }
 
                     await Task.WhenAll(tasklist).ConfigureAwait(false);
-
-                    qs += q;
                 }
 
-                var emoteTotlDict = new Dictionary<Discord.IEmote, int>(emoteReacDict);
-                foreach (var e in emoteTotlDict.Keys.ToList())
-                    emoteTotlDict[e] += emoteTextDict[$"{e}"];
+                var emoteTotalDict = new Dictionary<Discord.IEmote, int>(emoteReacDict);
+                foreach (var e in emoteTotalDict.Keys.ToList())
+                    emoteTotalDict[e] += emoteTextDict[$"{e}"];
                 var outputs = new List<string>();
                 var str = $"**=== Emoji Usage Stats ===**\n\n`{"Emoji",4} \u2502 {"Total",10} \u2502 {"Reactions",10} \u2502 {"Text",10}`\n";
 
-                foreach (var e in emoteTotlDict.OrderByDescending(kvp => kvp.Value))
+                foreach (var e in emoteTotalDict.OrderByDescending(kvp => kvp.Value))
                 {
-                    str += $"{e.Key,4}`   \u2502 {e.Value,10} \u2502 {emoteReacDict[e.Key],10} \u2502 {emoteTextDict[$"{e.Key}"],10}` {Environment.NewLine}";
+                    str += $"{e.Key,4}`   \u2502 {e.Value,10} \u2502 {emoteReacDict[e.Key],10} \u2502 {emoteTextDict[$"{e.Key}"],10}`{Environment.NewLine}";
                     if (str.Length > 1900)
                     {
                         outputs.Add(str);
@@ -381,152 +360,19 @@ namespace CozyBot
                 }
                 outputs.Add(str);
 
-                foreach (var output in outputs)
-                    await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
-                await msg.Channel.SendMessageAsync($"Total time spent : {sw.Elapsed}").ConfigureAwait(false);
                 sw.Stop();
+                foreach (var output in outputs)
+                {
+                    await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+                    await Task.Delay(500).ConfigureAwait(false);
+                }
+                await msg.Channel.SendMessageAsync($"Total time spent : {sw.Elapsed}").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : \n{ex.Message}\n{ex.StackTrace}");
                 throw;
             }
-        }
-
-        private async Task LimboCommand(SocketMessage msg)
-        {
-            var sw = new System.Diagnostics.Stopwatch();
-            sw.Start();
-            await _guild.DownloadUsersAsync().ConfigureAwait(false);
-            var passiveDict = new Dictionary<ulong, DateTime>();
-            var activeDict = new Dictionary<ulong, DateTime>();
-            var timestamp = DateTime.UtcNow;
-            var timeDiff = TimeSpan.FromDays(60.0d);
-            var timeBoundary = timestamp - timeDiff;
-            var searchChannelsList = new List<ulong>()
-            {
-                455231703368073228u,    // yerevan
-                502949010278055947u,    // bioproblems
-                594216681291644960u,    // sport-phys
-                455301207486103552u,    // memes
-                594216520947859472u,    // arts
-                455284470577102858u,    // international
-                482555295055347712u,    // science-and-it
-                622677140583743488u,    // military
-                518529241118408738u,    // music
-                618915135469125671u,    // books
-                455293744464527375u,    // anime
-                455317918930960384u,    // politach
-                455285679849472010u,    // gazem
-                456882800474456064u,    // paradox
-                455311999237095424u,    // pubg
-                455314596648189963u,    // factorio
-                576069178427965450u,    // ecc
-                455292440794890251u,    // he
-                557996950620995584u,    // fu
-                455302382188756993u,    // 3d
-                576069373001728010u     // ot
-            };
-
-            foreach(var user in _guild.Users)
-            {
-                var roleIds = user.Roles.Select(r => r.Id);
-                if (roleIds.Contains(455287352701616128u)) // pxls
-                    continue;
-                if (roleIds.Contains(455283878223937556u)) // cz pxls infantry
-                    continue;
-                if (roleIds.Contains(455284945774968833u)) // unterdїd
-                    continue;
-                if (roleIds.Contains(594215839503220752u)) // foreigndїd
-                    continue;
-                if (roleIds.Contains(455284885960130560u)) // dїd
-                    continue;
-                if (roleIds.Contains(683422699367956481u)) // readonly
-                    continue;
-                if (user.IsBot)                            // bot
-                    continue;
-                if (user.JoinedAt.Value.UtcDateTime > timeBoundary) // if user joined after search boundary time
-                    continue;
-                if (roleIds.Contains(455285000330543104u)) // vault dw
-                    passiveDict.Add(user.Id, timestamp);
-            }
-
-            int qs = 0;
-
-            foreach(var chId in searchChannelsList)
-            {
-                Discord.IMessage lastMsg = null;
-                if (_guild.GetChannel(chId) is SocketTextChannel stc)
-                {
-                    int q = 0;
-                    var asyncMessages = stc.GetMessagesAsync();
-                    var enumerator = asyncMessages.GetEnumerator();
-
-                    try
-                    {
-                        while (await enumerator.MoveNext().ConfigureAwait(false))
-                        {
-                            foreach (var message in enumerator.Current)
-                            {
-                                var usrId = message.Author.Id;
-                                if (passiveDict.Keys.Contains(usrId))
-                                    passiveDict.Remove(usrId);
-                                lastMsg = message;
-                                q++;
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : {stc.Name}\n{ex.Message}\n{ex.StackTrace}");
-                        throw;
-                    }
-
-                    while (lastMsg.Timestamp > timeBoundary)
-                    {
-                        asyncMessages = stc.GetMessagesAsync(lastMsg, Discord.Direction.Before);
-                        enumerator = asyncMessages.GetEnumerator();
-
-                        try
-                        {
-                            while (await enumerator.MoveNext().ConfigureAwait(false))
-                                foreach (var message in enumerator.Current)
-                                {
-                                    var usrId = message.Author.Id;
-                                    if (passiveDict.Keys.Contains(usrId))
-                                        passiveDict.Remove(usrId);
-                                    lastMsg = message;
-                                    q++;
-                                }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[EXCEPT][GUILDBOT] Fetch Messages failed : {stc.Name}\n{ex.Message}\n{ex.StackTrace}");
-                            throw;
-                        }
-                    }
-                    await msg.Channel.SendMessageAsync($"Processed {q} messages in {stc.Mention}.\n{passiveDict.Keys.Count} users left.").ConfigureAwait(false);
-                    qs += q;
-                }
-            }
-
-            List<string> msgStrs = new List<string>();
-            var messageStr = String.Empty;
-            foreach (var userId in passiveDict.Keys)
-            {
-                if (messageStr.Length > 1950)
-                {
-                    msgStrs.Add(messageStr);
-                    messageStr = String.Empty;
-                }
-                messageStr += $"{_guild.GetUser(userId).Mention} ";
-            }
-            msgStrs.Add(messageStr);
-
-            foreach (var str in msgStrs)
-                await msg.Channel.SendMessageAsync(str).ConfigureAwait(false);
-            sw.Stop();
-            await msg.Channel.SendMessageAsync($"Left {passiveDict.Count} users.\nProcessed {qs} messages in {sw.Elapsed.TotalSeconds} seconds.").ConfigureAwait(false);
         }
 
         private async Task SaveConfig()
@@ -540,19 +386,13 @@ namespace CozyBot
         }
 
         private async void ArchiveModule_ConfigChanged(object sender, ConfigChangedArgs args)
-        {
-            await SaveConfig().ConfigureAwait(false);
-        }
+            => await SaveConfig().ConfigureAwait(false);
 
         private async void ImageModule_ConfigChanged(object sender, ConfigChangedArgs args)
-        {
-            await SaveConfig().ConfigureAwait(false);
-        }
+            => await SaveConfig().ConfigureAwait(false);
 
         private async void CitationModule_ConfigChanged(object sender, ConfigChangedArgs args)
-        {
-            await SaveConfig().ConfigureAwait(false);
-        }
+            => await SaveConfig().ConfigureAwait(false);
 
         private async Task BinaryChoiceCommand(SocketMessage msg)
         {
@@ -567,9 +407,8 @@ namespace CozyBot
         }
 
         private async Task Magic8BallCommand(SocketMessage msg)
-        {
-            await msg.Channel.SendMessageAsync(_magic8BallResponses[new Random(DateTime.Now.Millisecond).Next(_magic8BallResponses.Length)]).ConfigureAwait(false);
-        }
+            => await msg.Channel.SendMessageAsync(_magic8BallResponses[new Random(DateTime.Now.Millisecond)
+                    .Next(_magic8BallResponses.Length)]).ConfigureAwait(false);
 
         private async Task RollCommand(SocketMessage msg)
         {
@@ -634,9 +473,7 @@ namespace CozyBot
         }
 
         private async Task PingCommand(SocketMessage msg)
-        {
-            await msg.Channel.SendMessageAsync("Pong!").ConfigureAwait(false);
-        }
+            => await msg.Channel.SendMessageAsync("Pong!").ConfigureAwait(false);
 
         private async Task CtrlCommand(SocketMessage msg)
         {
