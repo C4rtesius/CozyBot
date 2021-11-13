@@ -228,10 +228,7 @@ namespace CozyBot
           }
           catch (Exception ex)
           {
-            Console.WriteLine(String.Join(Environment.NewLine,
-                                          $"[EXCEPT][GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}",
-                                          $"Exception catched: {ex.Message}",
-                                          $"Stack trace: {ex.StackTrace}"));
+            BotHelper.LogExceptionToConsole($"[GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}", ex);
             continue;
           }
 
@@ -250,10 +247,7 @@ namespace CozyBot
             }
             catch (Exception ex)
             {
-              Console.WriteLine(String.Join(Environment.NewLine,
-                                            $"[EXCEPT][GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}",
-                                            $"Exception caught: {ex.Message}",
-                                            $"Stack trace: {ex.StackTrace}"));
+              BotHelper.LogExceptionToConsole($"[GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}", ex);
               continue;
             }
 #if DEBUG
@@ -304,10 +298,7 @@ namespace CozyBot
               }
               catch (Exception ex)
               {
-                Console.WriteLine(String.Join(Environment.NewLine,
-                                              $"[EXCEPT][GUILDBOT] Processing Messages failed : {textChannel.Name}",
-                                              $"Exception caught: {ex.Message}",
-                                              $"Stack trace: {ex.StackTrace}"));
+                BotHelper.LogExceptionToConsole($"[GUILDBOT][EMOJISTATS] Processing Messages failed : {textChannel.Name}", ex);
               }
             }));
 
@@ -341,10 +332,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      "[EXCEPT][GUILDBOT][EMOJISTATS]: Command failed:",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole("[GUILDBOT][EMOJISTATS]. Command failed:", ex);
         throw;
       }
     }

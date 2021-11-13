@@ -71,10 +71,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      "[CORE][FATAL] Unrecoverable error occurred.",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole("[FATAL][CORE] Unrecoverable error occurred.", ex);
         throw;
       }
     }

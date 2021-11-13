@@ -16,11 +16,21 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[WARNING][EXCEPT] Message send failed in channel: {channel.Name}.",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        LogExceptionToConsole($"[WARNING] Message send failed in channel: {channel.Name}.", ex);
       }
+    }
+
+    public static string BuildExceptionMessage(string message, Exception ex)
+    {
+      return String.Join(Environment.NewLine,
+                         $"[EXCEPT]{message}",
+                         $"Exception caught: {ex.Message}",
+                         $"Stack trace: {ex.StackTrace}");
+    }
+
+    public static void LogExceptionToConsole(string message, Exception ex)
+    {
+      Console.WriteLine(BuildExceptionMessage(message, ex));
     }
   }
 }

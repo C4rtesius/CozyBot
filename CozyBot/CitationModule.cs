@@ -135,10 +135,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          Console.WriteLine(String.Join(Environment.NewLine,
-                                        $"[EXCEPT][{_stringID.ToUpper()}] Command call deletion failed: {key}",
-                                        $"Exception caught: {ex.Message}",
-                                        $"Stack trace: {ex.StackTrace}"));
+          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {key}", ex);
           throw;
         }
 
@@ -162,10 +159,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          Console.WriteLine(String.Join(Environment.NewLine,
-                                        $"[EXCEPT][{_stringID.ToUpper()}] Citation retrieval failed: {key}",
-                                        $"Exception caught: {ex.Message}",
-                                        $"Stack trace: {ex.StackTrace}"));
+          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation retrieval failed: {key}", ex);
           throw;
         }
 
@@ -178,10 +172,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          Console.WriteLine(String.Join(Environment.NewLine,
-                                        $"[EXCEPT][{_stringID.ToUpper()}] Citation send failed: {key}",
-                                        $"Exception caught: {ex.Message}",
-                                        $"Stack trace: {ex.StackTrace}"));
+          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation send failed: {key}", ex);
           throw;
         }
 
@@ -235,10 +226,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
         throw;
       }
 
@@ -264,10 +252,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Citation save failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation save failed: {msg.Content}", ex);
         throw;
       }
 
@@ -305,10 +290,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Config save failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Config save failed: {msg.Content}", ex);
         throw;
       }
 
@@ -338,10 +320,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
         throw;
       }
 
@@ -398,10 +377,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
         throw;
       }
 
@@ -436,10 +412,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          Console.WriteLine(String.Join(Environment.NewLine,
-                                        $"[EXCEPT][{_stringID.ToUpper()}] Citation loading failed: {kvp.Value.Value}",
-                                        $"Exception caught: {ex.Message}",
-                                        $"Stack trace: {ex.StackTrace}"));
+          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation loading failed: {kvp.Value.Value}", ex);
           throw;
         }
         if (citation.Length > _msgLengthLimit)
@@ -475,10 +448,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          Console.WriteLine(String.Join(Environment.NewLine,
-                                        $"[EXCEPT][{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}",
-                                        $"Exception caught: {ex.Message}",
-                                        $"Stack trace: {ex.StackTrace}"));
+          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
           throw;
         }
 
@@ -558,10 +528,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          Console.WriteLine(String.Join(Environment.NewLine,
-                                        $"[EXCEPT][{_stringID.ToUpper()}] Citation deletion failed: {key} -> {delKVP.Value.Value}",
-                                        $"Exception caught: {ex.Message}",
-                                        $"Stack trace: {ex.StackTrace}"));
+          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation deletion failed: {key} -> {delKVP.Value.Value}", ex);
           throw;
         }
       }
@@ -603,10 +570,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Default config creation failed: {filePath}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Default config creation failed: {filePath}", ex);
         throw;
       }
     }
