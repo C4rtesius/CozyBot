@@ -28,7 +28,7 @@ namespace CozyBot
     public bool CanExecute(SocketMessage msg)
       => _executeRule.Check(msg);
 
-    public async Task ExecuteCommand(SocketMessage msg)
-      => await _cmd(msg).ConfigureAwait(false);
+    public Task ExecuteCommand(SocketMessage msg)
+      => Task.Run(async () => await _cmd(msg).ConfigureAwait(false));
   }
 }
