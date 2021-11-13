@@ -385,13 +385,13 @@ namespace CozyBot
             ).ConfigureAwait(false);
         }
 
-        private async void ArchiveModule_ConfigChanged(object sender, ConfigChangedArgs args)
+        private async void ArchiveModule_ConfigChanged(object sender, ConfigChangedEventArgs eventArgs)
             => await SaveConfig().ConfigureAwait(false);
 
-        private async void ImageModule_ConfigChanged(object sender, ConfigChangedArgs args)
+        private async void ImageModule_ConfigChanged(object sender, ConfigChangedEventArgs eventArgs)
             => await SaveConfig().ConfigureAwait(false);
 
-        private async void CitationModule_ConfigChanged(object sender, ConfigChangedArgs args)
+        private async void CitationModule_ConfigChanged(object sender, ConfigChangedEventArgs eventArgs)
             => await SaveConfig().ConfigureAwait(false);
 
         private async Task BinaryChoiceCommand(SocketMessage msg)

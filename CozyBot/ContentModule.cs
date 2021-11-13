@@ -838,7 +838,7 @@ namespace CozyBot
             await Task.Run(
                 () =>
                 {
-                    _configChanged(this, new ConfigChangedArgs(configEl));
+                    _configChanged(this, new ConfigChangedEventArgs(configEl));
                 }
             );
         }

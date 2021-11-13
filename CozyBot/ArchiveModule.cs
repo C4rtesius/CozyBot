@@ -918,6 +918,6 @@ namespace CozyBot
     }
 
     protected async Task RaiseConfigChanged(XElement configEl)
-      => await Task.Run(() => _configChanged(this, new ConfigChangedArgs(configEl))).ConfigureAwait(false);
+      => await Task.Run(() => _configChanged(this, new ConfigChangedEventArgs(configEl))).ConfigureAwait(false);
   }
 }
