@@ -107,7 +107,8 @@ namespace CozyBot
 
     public void OnCtrlEvent(CtrlType type)
     {
-      _ctrlEvent.Invoke(type);
+      if (_ctrlEvent != null)
+        _ctrlEvent.Invoke(type);
 
       Task.Run(SaveConfig).GetAwaiter().GetResult();
     }
