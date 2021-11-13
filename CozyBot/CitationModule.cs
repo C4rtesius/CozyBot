@@ -219,7 +219,7 @@ namespace CozyBot
       }
       await Task.Delay(totalDelay).ConfigureAwait(false);
 
-      await msg.Channel.SendMessageAsync(line).ConfigureAwait(false);
+      await BotHelper.SendMessageAsyncSafe(msg.Channel, line).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -314,7 +314,7 @@ namespace CozyBot
 
       Reconfigure(_configEl);
 
-      await msg.Channel.SendMessageAsync($"Записав цитатку {EmojiCodes.DankPepe}").ConfigureAwait(false);
+      await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Записав цитатку {EmojiCodes.DankPepe}").ConfigureAwait(false);
     }
 
     protected override void GenerateUseCommands(List<ulong> perms)
@@ -386,18 +386,8 @@ namespace CozyBot
       foreach (var outputMsg in outputMsgs)
         await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
 
-      try
-      {
-        await msg.Channel.SendMessageAsync($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Message send failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
-        throw;
-      }
+      await BotHelper.SendMessageAsyncSafe(msg.Channel,
+                                           $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }
 
     protected virtual async Task VerboseListCommand(SocketMessage msg)
@@ -470,18 +460,9 @@ namespace CozyBot
       foreach (var outputMsg in outputMsgs)
         await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
 
-      try
-      {
-        await msg.Channel.SendMessageAsync($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Message send failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
-        throw;
-      }
+      await BotHelper.SendMessageAsyncSafe(msg.Channel,
+                                           $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+
     }
 
     protected override async Task HelpCommand(SocketMessage msg)
@@ -544,7 +525,8 @@ namespace CozyBot
 
         await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
-        await msg.Channel.SendMessageAsync($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(msg.Channel,
+                                             $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
       }
     }
 
@@ -596,10 +578,10 @@ namespace CozyBot
 
         output += "```" + Environment.NewLine + EmojiCodes.Pepe;
 
-        await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
       }
       else
-        await msg.Channel.SendMessageAsync(@$"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(msg.Channel, @$"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
     }
 
     /// <summary>

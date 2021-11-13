@@ -334,10 +334,10 @@ namespace CozyBot
         sw.Stop();
         foreach (var output in outputs)
         {
-          await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+          await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
           await Task.Delay(500).ConfigureAwait(false);
         }
-        await msg.Channel.SendMessageAsync($"Total time spent: {sw.Elapsed}").ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Total time spent: {sw.Elapsed}").ConfigureAwait(false);
       }
       catch (Exception ex)
       {
@@ -365,10 +365,10 @@ namespace CozyBot
       => await SaveConfig().ConfigureAwait(false);
 
     private async Task BinaryChoiceCommand(SocketMessage msg)
-      => await msg.Channel.SendMessageAsync($"{(_rng.Next(10) > 4 ? "Так" : "Ні")} {EmojiCodes.Pizdec}").ConfigureAwait(false);
+      => await BotHelper.SendMessageAsyncSafe(msg.Channel, $"{(_rng.Next(10) > 4 ? "Так" : "Ні")} {EmojiCodes.Pizdec}").ConfigureAwait(false);
 
     private async Task Magic8BallCommand(SocketMessage msg)
-      => await msg.Channel.SendMessageAsync(_magic8BallResponses[_rng.Next(_magic8BallResponses.Length)]).ConfigureAwait(false);
+      => await BotHelper.SendMessageAsyncSafe(msg.Channel,_magic8BallResponses[_rng.Next(_magic8BallResponses.Length)]).ConfigureAwait(false);
 
     private async Task RollCommand(SocketMessage msg)
     {
@@ -411,11 +411,11 @@ namespace CozyBot
       for (int i = 0; i < num; i++)
         result += (ulong)_rng.Next(1, size + 1);
 
-      await msg.Channel.SendMessageAsync($"Ви заролили: {result} {EmojiCodes.Pizdec}").ConfigureAwait(false);
+      await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Ви заролили: {result} {EmojiCodes.Pizdec}").ConfigureAwait(false);
     }
 
     private async Task PingCommand(SocketMessage msg)
-      => await msg.Channel.SendMessageAsync("Pong!").ConfigureAwait(false);
+      => await BotHelper.SendMessageAsyncSafe(msg.Channel, "Pong!").ConfigureAwait(false);
 
     private async Task CtrlCommand(SocketMessage msg)
     {
@@ -429,7 +429,7 @@ namespace CozyBot
       {
         case "off":
           await SaveConfig().ConfigureAwait(false);
-          await msg.Channel.SendMessageAsync($"Лягаю спати {EmojiCodes.Pepe}").ConfigureAwait(false);
+          await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Лягаю спати {EmojiCodes.Pepe}").ConfigureAwait(false);
           break;
         case "modules":
           await ModulesCommand(words, msg).ConfigureAwait(false);
@@ -447,7 +447,7 @@ namespace CozyBot
         case "list":
           if (_modulesDict.Count == 0)
           {
-            await msg.Channel.SendMessageAsync("Не підключено жодного модуля.").ConfigureAwait(false);
+            await BotHelper.SendMessageAsyncSafe(msg.Channel, "Не підключено жодного модуля.").ConfigureAwait(false);
             return;
           }
           string output = $"Список підключених модулів :{Environment.NewLine}```";
@@ -455,7 +455,7 @@ namespace CozyBot
             output += $"{kvp.Key} {(kvp.Value.IsActive ? "включений" : "виключений")}{Environment.NewLine}";
           output += "```";
 
-          await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+          await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
           break;
         case "on":
           if (words.Length < 4)
@@ -495,7 +495,7 @@ namespace CozyBot
 
       if (modulesProcessed.Count == 0)
       {
-        await msg.Channel.SendMessageAsync($"Нічого не було змінено {EmojiCodes.Thonk}").ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Нічого не було змінено {EmojiCodes.Thonk}").ConfigureAwait(false);
         return;
       }
 
@@ -510,7 +510,7 @@ namespace CozyBot
       await SaveConfig().ConfigureAwait(false);
 
       string output = $"Наступні модулі було {(newState ? @"уві" : @"ви")}мкнено : {modulesString} {EmojiCodes.Picardia}";
-      await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+      await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
     }
   }
 }

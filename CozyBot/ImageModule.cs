@@ -192,7 +192,7 @@ namespace CozyBot
     {
       if (File.Exists(filepath))
       {
-        await sc.SendMessageAsync($"Пікча з такою назвою вже є {EmojiCodes.Tomas}").ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(sc, $"Пікча з такою назвою вже є {EmojiCodes.Tomas}").ConfigureAwait(false);
         return;
       }
 
@@ -200,7 +200,7 @@ namespace CozyBot
         using (FileStream fs = new FileStream(filepath, FileMode.Create, FileAccess.Write))
           await (await hc.GetAsync(new Uri(att.Url)).ConfigureAwait(false)).Content.CopyToAsync(fs).ConfigureAwait(false);
 
-      await sc.SendMessageAsync("Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
+      await BotHelper.SendMessageAsyncSafe(sc, "Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
     }
 
     protected override async Task AddCommand(SocketMessage msg)
@@ -353,18 +353,7 @@ namespace CozyBot
 
       output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
 
-      try
-      {
-        await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Message send failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
-        throw;
-      }
+      await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
     }
 
     protected override async Task HelpCommand(SocketMessage msg)
@@ -428,7 +417,7 @@ namespace CozyBot
         await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
         string output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
-        await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
       }
     }
 
@@ -469,7 +458,7 @@ namespace CozyBot
 
       if (imgDeleted.Count == 0)
       {
-        await msg.Channel.SendMessageAsync(@"Щооо ?? " + EmojiCodes.WaitWhat).ConfigureAwait(false);
+        await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
         return;
       }
 
@@ -480,7 +469,7 @@ namespace CozyBot
         output += $"{deleted}{Environment.NewLine}";
       output += $"```{Environment.NewLine}{EmojiCodes.Pepe}";
 
-      await msg.Channel.SendMessageAsync(output).ConfigureAwait(false);
+      await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -589,7 +589,7 @@ namespace CozyBot
           break;
       }
 
-      await msg.Channel.SendMessageAsync("Дозволи було змінено " + EmojiCodes.Picardia).ConfigureAwait(false);
+      await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Дозволи було змінено {EmojiCodes.Picardia}").ConfigureAwait(false);
     }
 
     /// <summary>
