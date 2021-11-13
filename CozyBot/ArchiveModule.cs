@@ -434,8 +434,9 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join($"[EXCEPT][ARCHIVEMODULE] Dump failed: {id}\n",
-                                      $"Exception caught: {ex.Message}\n",
+        Console.WriteLine(String.Join(Environment.NewLine,
+                                      $"[EXCEPT][{_stringID.ToUpper()}] Dump failed: {id}",
+                                      $"Exception caught: {ex.Message}",
                                       $"Stack trace: {ex.StackTrace}"));
       }
     }
@@ -714,8 +715,9 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join($"[EXCEPT][ARCHIVEMODULE] Fetch Messages failed : {textChannel.Name}\n",
-                                      $"Exception catched: {ex.Message}\n",
+        Console.WriteLine(String.Join(Environment.NewLine,
+                                      $"[EXCEPT][{_stringID.ToUpper()}] Fetch Messages failed : {textChannel.Name}",
+                                      $"Exception catched: {ex.Message}",
                                       $"Stack trace: {ex.StackTrace}"));
 
         throw;
@@ -734,8 +736,9 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join($"[EXCEPT][ARCHIVEMODULE] Fetch Messages failed : {textChannel.Name}\n",
-                                      $"Exception catched: {ex.Message}\n",
+        Console.WriteLine(String.Join(Environment.NewLine,
+                                      $"[EXCEPT][{_stringID.ToUpper()}] Fetch Messages failed : {textChannel.Name}",
+                                      $"Exception catched: {ex.Message}",
                                       $"Stack trace: {ex.StackTrace}"));
         throw;
       }
