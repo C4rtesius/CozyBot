@@ -154,27 +154,6 @@ namespace CozyBot
           _modulesDict.Add(imageModule.StringID, imageModule);
           imageModule.GuildBotConfigChanged += ImageModule_ConfigChanged;
         }
-
-        // Turned off as of 18.05.2021
-        //if (modulesEl.Element("archive") != null)
-        //{
-        //    ArchiveModule archiveModule = new ArchiveModule(modulesEl, _adminIds, _guildPath, _guild);
-        //    _modulesDict.Add(archiveModule.StringID, archiveModule);
-        //    archiveModule.GuildBotConfigChanged += ArchiveModule_ConfigChanged;
-        //    CtrlEvent += archiveModule.OnCtrlEvent;
-        //}
-        //if (modulesEl.Element("pxls-alerts") != null)
-        //{
-        //    PxlsAlertsModule pxlsModule = new PxlsAlertsModule(modulesEl, _adminIds, _guild, _guildPath);
-        //    _modulesDict.Add(pxlsModule.StringID, pxlsModule);
-        //    //pxlsModule.GuildBotConfigChanged +=
-        //}
-        //if (modulesEl.Element("music") != null)
-        //{
-        //    MusicModule musicModule = new MusicModule(modulesEl, _adminIds, _guild, _guildPath);
-        //    _modulesDict.Add(musicModule.StringID, musicModule);
-        //    //pxlsModule.GuildBotConfigChanged +=
-        //}
       }
     }
 
@@ -378,9 +357,6 @@ namespace CozyBot
           _config.Save(_configPath);
       }).ConfigureAwait(false);
     }
-
-    //private async void ArchiveModule_ConfigChanged(object sender, ConfigChangedEventArgs eventArgs)
-    //  => await SaveConfig().ConfigureAwait(false);
 
     private async void ImageModule_ConfigChanged(object sender, ConfigChangedEventArgs eventArgs)
       => await SaveConfig().ConfigureAwait(false);
