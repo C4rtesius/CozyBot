@@ -331,6 +331,8 @@ namespace CozyBot
 
     protected override async Task SearchCommand(SocketMessage msg)
     {
+      string cmdPrefix = $"[{LogName}][SEARCH-FILES]";
+      BotHelper.LogDebugToConsole($"{cmdPrefix} Entering.");
       var regexStr = msg.Content.Replace($"{_prefix}search", String.Empty, StringComparison.InvariantCulture).TrimStart();
       try
       {
@@ -338,8 +340,7 @@ namespace CozyBot
           return;
         if (regexStr.Length > 200) // unreasonably long regex
         {
-          await msg.Channel.SendMessageAsyncSafe($"Занадто довгий запит: `{regexStr}` {EmojiCodes.WaitWhat}")
-            .ConfigureAwait(false);
+          await msg.Channel.SendMessageAsyncSafe($"Занадто довгий запит: `{regexStr}` {EmojiCodes.WaitWhat}").ConfigureAwait(false);
           return;
         }
 
@@ -347,24 +348,25 @@ namespace CozyBot
 
         var waitTask = Task.Run(async () =>
         {
-          var waitMsg = await msg.Channel.SendMessageAsyncSafe($"Шукаю `{regexStr}` в цитатах {EmojiCodes.Bumagi}")
-            .ConfigureAwait(false);
+          BotHelper.LogDebugToConsole($"{cmdPrefix} Entering waiter.");
+          var waitMsg = await msg.Channel.SendMessageAsyncSafe($"Шукаю `{regexStr}` в цитатах {EmojiCodes.Bumagi}").ConfigureAwait(false);
           if (waitMsg == null)
             return;
 
           while (mres != null && !mres.IsSet)
           {
             await Task.Delay(5000).ConfigureAwait(false);
-            await waitMsg.ModifyAsync(p => p.Content += $"{EmojiCodes.Bumagi}").ConfigureAwait(false);
+            await waitMsg.ModifyAsync(p => p.Content = $"{p.Content}{EmojiCodes.Bumagi}").ConfigureAwait(false);
           }
-
-          await waitMsg.ModifyAsync(p => p.Content += $"{Environment.NewLine}Пошук закінчено. {EmojiCodes.Picardia}").ConfigureAwait(false);
+          //MessageProperties
+          await waitMsg.ModifyAsync(p => p.Content = $"{p.Content}{Environment.NewLine}Пошук закінчено. {EmojiCodes.Picardia}").ConfigureAwait(false);
         });
 
         Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant | RegexOptions.Multiline);
         var itemsDict = new Dictionary<string, XElement>();
-        var matchesList = new Dictionary<string, string>();
+        var matchesDict = new Dictionary<string, string>();
         RPItemDictGenerator(GetRootByKey(String.Empty), String.Empty, itemsDict);
+        BotHelper.LogDebugToConsole($"{cmdPrefix} {itemsDict.Count} entries in dictionary.");
 
         foreach (var kvp in itemsDict)
         {
@@ -373,8 +375,7 @@ namespace CozyBot
 
           try
           {
-            citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, citationFileName))
-              .ConfigureAwait(false);
+            citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, citationFileName)).ConfigureAwait(false);
           }
           catch (Exception ex)
           {
@@ -384,43 +385,45 @@ namespace CozyBot
 
           if (citation.Length > _msgLengthLimit || !regex.IsMatch(citation))
             continue;
-          matchesList.Add(kvp.Key, citation);
+          matchesDict.Add(kvp.Key, citation);
         }
+
+        BotHelper.LogDebugToConsole($"{cmdPrefix} {matchesDict.Count} matches.");
 
         mres.Set();
 
-        if (matchesList.Count == 0)
+        if (matchesDict.Count != 0)
         {
-          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено в цитатах за запитом: `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
-          return;
-        }
-
-        string output = $"**Результати пошуку в цитатах за запитом: `{regexStr}`:**";
-        List<string> outputMsgs = new List<string>();
-        foreach (var kvp in matchesList)
-        {
-          string keyStr = $"`{kvp.Key}`";
-          if (output.Length + keyStr.Length + kvp.Value.Length < _msgLengthLimit)
-            output = $"{output}{Environment.NewLine}{keyStr}{Environment.NewLine}{kvp.Value}";
-          else
+          string output = $"**Результати пошуку в цитатах за запитом: `{regexStr}`:**";
+          List<string> outputMsgs = new List<string>();
+          foreach (var kvp in matchesDict)
           {
-            outputMsgs.Add(output);
-            output = $"{keyStr}{Environment.NewLine}{kvp.Value}";
+            string keyStr = $"`{kvp.Key}`";
+            if (output.Length + keyStr.Length + kvp.Value.Length < _msgLengthLimit)
+              output = $"{output}{Environment.NewLine}{keyStr}{Environment.NewLine}{kvp.Value}";
+            else
+            {
+              outputMsgs.Add(output);
+              output = $"{keyStr}{Environment.NewLine}{kvp.Value}";
+            }
           }
+
+          outputMsgs.Add(output);
+
+          var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+          foreach (var message in outputMsgs)
+            await dm.SendMessageAsync(message).ConfigureAwait(false);
         }
-
-        outputMsgs.Add(output);
-
-        var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-        foreach (var message in outputMsgs)
-          await dm.SendMessageAsync(message).ConfigureAwait(false);
+        else
+          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено в цитатах за запитом: `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}][SEARCH-FILES] Search failed for regex \"{regexStr}\".", ex);
+        BotHelper.LogExceptionToConsole($"{cmdPrefix} Search failed for regex \"{regexStr}\".", ex);
         throw;
       }
 
+      BotHelper.LogDebugToConsole($"{cmdPrefix} Passing control to keys search.");
       await base.SearchCommand(msg).ConfigureAwait(false);
     }
 
