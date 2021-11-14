@@ -222,7 +222,7 @@ namespace CozyBot
                   break;
                 msgList.Add(message);
               }
-              if (lastSeenMsg.Timestamp < timeBoundary)
+              if (lastSeenMsg == null || lastSeenMsg.Timestamp < timeBoundary)
                 break;
             }
           }
