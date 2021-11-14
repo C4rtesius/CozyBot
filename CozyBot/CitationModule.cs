@@ -352,17 +352,18 @@ namespace CozyBot
           var waitMsg = await msg.Channel.SendMessageAsyncSafe($"Шукаю `{regexStr}` в цитатах {EmojiCodes.Bumagi}").ConfigureAwait(false);
           if (waitMsg == null)
             return;
-
+          string content = String.Empty;
           while (mres != null && !mres.IsSet)
           {
             await Task.Delay(5000).ConfigureAwait(false);
-            await waitMsg.ModifyAsync(p => p.Content = $"{p.Content}{EmojiCodes.Bumagi}").ConfigureAwait(false);
+            content = (await msg.Channel.GetMessageAsync(waitMsg.Id).ConfigureAwait(false)).Content;
+            await waitMsg.ModifyAsync(p => { p.Content = $"{content}{EmojiCodes.Bumagi}"; }).ConfigureAwait(false);
           }
-          //MessageProperties
-          await waitMsg.ModifyAsync(p => p.Content = $"{p.Content}{Environment.NewLine}Пошук закінчено. {EmojiCodes.Picardia}").ConfigureAwait(false);
+          content = (await msg.Channel.GetMessageAsync(waitMsg.Id).ConfigureAwait(false)).Content;
+          await waitMsg.ModifyAsync(p => { p.Content = $"{content}{Environment.NewLine}Пошук закінчено. {EmojiCodes.Picardia}"; }).ConfigureAwait(false);
         });
 
-        Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant | RegexOptions.Multiline);
+        Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant | RegexOptions.Multiline | RegexOptions.IgnoreCase);
         var itemsDict = new Dictionary<string, XElement>();
         var matchesDict = new Dictionary<string, string>();
         RPItemDictGenerator(GetRootByKey(String.Empty), String.Empty, itemsDict);
@@ -391,10 +392,11 @@ namespace CozyBot
         BotHelper.LogDebugToConsole($"{cmdPrefix} {matchesDict.Count} matches.");
 
         mres.Set();
+        await Task.WhenAll(waitTask).ConfigureAwait(false);
 
         if (matchesDict.Count != 0)
         {
-          await msg.Channel.SendMessageAsyncSafe($"Знайдено **цитати** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
+          await msg.Channel.SendMessageAsyncSafe($"Знайдено {matchesDict.Count} **цитат** за запитом `{regexStr}` {EmojiCodes.DankPepe}").ConfigureAwait(false);
 
           string output = $"**Результати пошуку **цитат** за запитом: `{regexStr}`:**";
           List<string> outputMsgs = new List<string>();

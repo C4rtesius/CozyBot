@@ -596,7 +596,7 @@ namespace CozyBot
           await msg.Channel.SendMessageAsyncSafe($"Не знайдено **ключів** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
           return;
         }
-        await msg.Channel.SendMessageAsyncSafe($"Знайдено **ключі** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
+        await msg.Channel.SendMessageAsyncSafe($"Знайдено {matchedKeysList.Count} **ключів** за запитом `{regexStr}` {EmojiCodes.DankPepe}").ConfigureAwait(false);
 
         string output = $"Результати пошуку **ключів** за запитом `{regexStr}`:{Environment.NewLine}```";
         List<string> outputMsgs = new List<string>();
@@ -617,7 +617,7 @@ namespace CozyBot
         var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
         foreach (var message in outputMsgs)
           await dm.SendMessageAsync(message).ConfigureAwait(false);
-        await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+        //await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
       }
       catch (Exception ex)
       {
