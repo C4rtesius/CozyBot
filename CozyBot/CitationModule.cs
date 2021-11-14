@@ -22,11 +22,6 @@ namespace CozyBot
     //Private Fields
 
     /// <summary>
-    /// Used for Discord message limit check.
-    /// </summary>
-    private static int _msgLengthLimit = 1800;
-
-    /// <summary>
     /// Filename of module config.
     /// </summary>
     private static string _configFileName = "CitationModuleConfig.xml";
