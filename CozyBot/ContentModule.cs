@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
+using System.Globalization;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
@@ -127,6 +128,11 @@ namespace CozyBot
     /// Module string identifier.
     /// </summary>
     public abstract string StringID { get; }
+
+    /// <summary>
+    /// Module identifier for logging purposes.
+    /// </summary>
+    public virtual string LogName => StringID.ToUpper(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Module XML config path.

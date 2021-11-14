@@ -124,7 +124,7 @@ namespace CozyBot
     {
       return async (msg) =>
       {
-        await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][USE]").ConfigureAwait(false);
+        await msg.DeleteAsyncSafe($"[{LogName}][USE]").ConfigureAwait(false);
 
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
         if (_ratelimitDict.ContainsKey(dictKey))
@@ -144,7 +144,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] File send failed: {key}", ex);
+          BotHelper.LogExceptionToConsole($"[{LogName}] File send failed: {key}", ex);
           throw;
         }
 
@@ -224,7 +224,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] File download failed: {regexMatch.Groups["key"].Value}", ex);
+        BotHelper.LogExceptionToConsole($"[{LogName}] File download failed: {regexMatch.Groups["key"].Value}", ex);
         throw;
       }
 
@@ -251,20 +251,20 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Config save failed: {msg.Content}", ex);
+        BotHelper.LogExceptionToConsole($"[{LogName}] Config save failed: {msg.Content}", ex);
         throw;
       }
 
       Reconfigure(_configEl);
 
-      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][ADD]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogName}][ADD]").ConfigureAwait(false);
     }
 
     protected override async Task ListCommand(SocketMessage msg)
     {
       // TODO : fix a bug with wrong `list` command output
 
-      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][LIST]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogName}][LIST]").ConfigureAwait(false);
 
       // TODO : fix `c!list key` when key contains only 1 item
 
@@ -321,7 +321,7 @@ namespace CozyBot
       if (!(msg.Author is SocketGuildUser user))
         return;
 
-      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][HELP]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogName}][HELP]").ConfigureAwait(false);
 
       var guild = user.Guild;
       string iconUrl = guild.IconUrl;
@@ -397,7 +397,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Image deletion failed: {key} -> {delKVP.Value.Value}", ex);
+          BotHelper.LogExceptionToConsole($"[{LogName}] Image deletion failed: {key} -> {delKVP.Value.Value}", ex);
           throw;
         }
       }
@@ -435,7 +435,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Default config creation failed.", ex);
+        BotHelper.LogExceptionToConsole($"[{LogName}] Default config creation failed.", ex);
         throw;
       }
     }

@@ -129,7 +129,7 @@ namespace CozyBot
     {
       return async (msg) =>
       {
-        await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][USE][key={key}]").ConfigureAwait(false);
+        await msg.DeleteAsyncSafe($"[{LogName}][USE][key={key}]").ConfigureAwait(false);
 
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
         if (_ratelimitDict.ContainsKey(dictKey))
@@ -151,7 +151,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation retrieval failed: {key}", ex);
+          BotHelper.LogExceptionToConsole($"[{LogName}] Citation retrieval failed: {key}", ex);
           throw;
         }
 
@@ -164,7 +164,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation send failed: {key}", ex);
+          BotHelper.LogExceptionToConsole($"[{LogName}] Citation send failed: {key}", ex);
           throw;
         }
 
@@ -212,7 +212,7 @@ namespace CozyBot
     /// <returns>Async Task performing citation addition logic.</returns>
     protected override async Task AddCommand(SocketMessage msg)
     {
-      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][ADD]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogName}][ADD]").ConfigureAwait(false);
 
       if (!Regex.IsMatch(msg.Content, AddCommandRegex))
         return;
@@ -236,7 +236,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation save failed: {msg.Content}", ex);
+        BotHelper.LogExceptionToConsole($"[{LogName}] Citation save failed: {msg.Content}", ex);
         throw;
       }
 
@@ -274,7 +274,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Config save failed: {msg.Content}", ex);
+        BotHelper.LogExceptionToConsole($"[{LogName}] Config save failed: {msg.Content}", ex);
         throw;
       }
 
@@ -298,7 +298,7 @@ namespace CozyBot
 
     protected override async Task ListCommand(SocketMessage msg)
     {
-      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][LIST]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogName}][LIST]").ConfigureAwait(false);
 
       if (!Regex.IsMatch(msg.Content, ListCommandRegex))
         return;
@@ -346,7 +346,7 @@ namespace CozyBot
 
     protected virtual async Task VerboseListCommand(SocketMessage msg)
     {
-      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][VLIST]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogName}][VLIST]").ConfigureAwait(false);
 
       if (!Regex.IsMatch(msg.Content, ListCommandRegex))
         return;
@@ -379,7 +379,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation loading failed: {kvp.Value.Value}", ex);
+          BotHelper.LogExceptionToConsole($"[{LogName}] Citation loading failed: {kvp.Value.Value}", ex);
           throw;
         }
         if (citation.Length > _msgLengthLimit)
@@ -408,7 +408,7 @@ namespace CozyBot
       if (!(msg.Author is SocketGuildUser user))
         return;
 
-      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][HELP]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogName}][HELP]").ConfigureAwait(false);
 
       var guild = user.Guild;
       string iconUrl = guild.IconUrl;
@@ -484,7 +484,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Citation deletion failed: {key} -> {delKVP.Value.Value}", ex);
+          BotHelper.LogExceptionToConsole($"[{LogName}] Citation deletion failed: {key} -> {delKVP.Value.Value}", ex);
           throw;
         }
       }
@@ -526,7 +526,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Default config creation failed: {filePath}", ex);
+        BotHelper.LogExceptionToConsole($"[{LogName}] Default config creation failed: {filePath}", ex);
         throw;
       }
     }

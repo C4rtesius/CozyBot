@@ -7,6 +7,7 @@ namespace CozyBot
   {
     bool IsActive { get; }
     string StringID { get; }
+    string LogName { get; }
     string ModuleXmlName { get; }
     IEnumerable<IBotCommand> ActiveCommands { get; }
 
