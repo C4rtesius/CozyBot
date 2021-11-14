@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
+using Discord.Rest;
 using Discord.WebSocket;
 
 namespace CozyBot
@@ -9,16 +10,18 @@ namespace CozyBot
   {
     private static object _consoleLock = new object();
 
-    public static async Task SendMessageAsyncSafe(this ISocketMessageChannel channel, string content)
+    public static async Task<RestUserMessage> SendMessageAsyncSafe(this ISocketMessageChannel channel, string content)
     {
       try
       {
         if (channel != null && !String.IsNullOrEmpty(content))
-          await channel.SendMessageAsync(content).ConfigureAwait(false);
+          return await channel.SendMessageAsync(content).ConfigureAwait(false);
+        return null;
       }
       catch (Exception ex)
       {
         LogExceptionToConsole($"[WARNING] Message send failed in channel: {channel.Name}.", ex);
+        return null;
       }
     }
 

@@ -297,7 +297,7 @@ namespace CozyBot
 
       string output = String.Concat("**Список доступних цитат",
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
-                                    $":**{Environment.NewLine}```{Environment.NewLine}");
+                                    $":**{Environment.NewLine}```");
 
       var list = RPKeyListGenerator(listRoot,
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.",
@@ -329,6 +329,101 @@ namespace CozyBot
       await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }
 
+    protected override async Task SearchCommand(SocketMessage msg)
+    {
+      var regexStr = msg.Content.Replace($"{_prefix}search", String.Empty, StringComparison.InvariantCulture).TrimStart();
+      try
+      {
+        if (regexStr.Length == 0)
+          return;
+        if (regexStr.Length > 200) // unreasonably long regex
+        {
+          await msg.Channel.SendMessageAsyncSafe($"Занадто довгий запит: `{regexStr}` {EmojiCodes.WaitWhat}")
+            .ConfigureAwait(false);
+          return;
+        }
+
+        using ManualResetEventSlim mres = new ManualResetEventSlim(false);
+
+        var waitTask = Task.Run(async () =>
+        {
+          var waitMsg = await msg.Channel.SendMessageAsyncSafe($"Шукаю `{regexStr}` в цитатах {EmojiCodes.Bumagi}")
+            .ConfigureAwait(false);
+          if (waitMsg == null)
+            return;
+
+          while (mres != null && !mres.IsSet)
+          {
+            await Task.Delay(5000).ConfigureAwait(false);
+            await waitMsg.ModifyAsync(p => p.Content += $"{EmojiCodes.Bumagi}").ConfigureAwait(false);
+          }
+
+          await waitMsg.ModifyAsync(p => p.Content += $"{Environment.NewLine}Пошук закінчено. {EmojiCodes.Picardia}").ConfigureAwait(false);
+        });
+
+        Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant | RegexOptions.Multiline);
+        var itemsDict = new Dictionary<string, XElement>();
+        var matchesList = new Dictionary<string, string>();
+        RPItemDictGenerator(GetRootByKey(String.Empty), String.Empty, itemsDict);
+
+        foreach (var kvp in itemsDict)
+        {
+          string citation;
+          string citationFileName = kvp.Value.Value;
+
+          try
+          {
+            citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, citationFileName))
+              .ConfigureAwait(false);
+          }
+          catch (Exception ex)
+          {
+            BotHelper.LogExceptionToConsole($"[{LogName}] Citation loading failed: {kvp.Value.Value}", ex);
+            throw;
+          }
+
+          if (citation.Length > _msgLengthLimit || !regex.IsMatch(citation))
+            continue;
+          matchesList.Add(kvp.Key, citation);
+        }
+
+        mres.Set();
+
+        if (matchesList.Count == 0)
+        {
+          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено в цитатах за запитом: `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
+          return;
+        }
+
+        string output = $"**Результати пошуку в цитатах за запитом: `{regexStr}`:**";
+        List<string> outputMsgs = new List<string>();
+        foreach (var kvp in matchesList)
+        {
+          string keyStr = $"`{kvp.Key}`";
+          if (output.Length + keyStr.Length + kvp.Value.Length < _msgLengthLimit)
+            output = $"{output}{Environment.NewLine}{keyStr}{Environment.NewLine}{kvp.Value}";
+          else
+          {
+            outputMsgs.Add(output);
+            output = $"{keyStr}{Environment.NewLine}{kvp.Value}";
+          }
+        }
+
+        outputMsgs.Add(output);
+
+        var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+        foreach (var message in outputMsgs)
+          await dm.SendMessageAsync(message).ConfigureAwait(false);
+      }
+      catch (Exception ex)
+      {
+        BotHelper.LogExceptionToConsole($"[{LogName}][SEARCH-FILES] Search failed for regex \"{regexStr}\".", ex);
+        throw;
+      }
+
+      await base.SearchCommand(msg).ConfigureAwait(false);
+    }
+
     protected virtual async Task VerboseListCommand(SocketMessage msg)
     {
       await msg.DeleteAsyncSafe($"[{LogName}][VLIST]").ConfigureAwait(false);
@@ -349,7 +444,7 @@ namespace CozyBot
 
       string output = String.Concat("**Розширений список цитат",
                                     String.IsNullOrWhiteSpace(cmdKey) ? String.Empty : @$" за ключем `{cmdKey}`",
-                                    $":** {Environment.NewLine}");
+                                    $":**");
 
       foreach (var kvp in itemsDict)
       {
@@ -368,13 +463,13 @@ namespace CozyBot
         if (citation.Length > _msgLengthLimit)
           continue; // if file contents are longer than limit then skip file
 
-        var keyStr = $@"`{kvp.Key}` :";
+        var keyStr = $@"`{kvp.Key}`";
         if (output.Length + keyStr.Length + citation.Length < _msgLengthLimit)
-          output = $"{output}{keyStr}{Environment.NewLine}{citation}{Environment.NewLine}";
+          output = $"{output}{Environment.NewLine}{keyStr}{Environment.NewLine}{citation}";
         else
         {
           outputMsgs.Add(output);
-          output = $"{keyStr}{Environment.NewLine}{citation}{Environment.NewLine}";
+          output = $"{keyStr}{Environment.NewLine}{citation}";
         }
       }
 

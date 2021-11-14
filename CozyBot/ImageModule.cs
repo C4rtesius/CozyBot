@@ -273,8 +273,7 @@ namespace CozyBot
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" по підключу `{keyStr}`",
                                     ":**",
                                     Environment.NewLine,
-                                    "```",
-                                    Environment.NewLine);
+                                    "```");
 
       var list = RPKeyListGenerator(listRoot,
                                     String.IsNullOrWhiteSpace(keyStr) ? "" : keyStr + ".",
