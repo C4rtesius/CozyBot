@@ -23,17 +23,13 @@ namespace CozyBot
     }
 
     public static string BuildExceptionMessage(string message, Exception ex)
-    {
-      return String.Join(Environment.NewLine,
-                         $"[EXCEPT]{message}",
-                         $"Exception caught: {ex.Message}",
-                         $"Stack trace: {ex.StackTrace}");
-    }
+      => String.Join(Environment.NewLine,
+                     $"[EXCEPT]{message}",
+                     $"Exception caught: {ex.Message}",
+                     $"Stack trace: {ex.StackTrace}");
 
     public static void LogExceptionToConsole(string message, Exception ex)
-    {
-      WriteToConsole(BuildExceptionMessage(message, ex));
-    }
+      => WriteToConsole(BuildExceptionMessage(message, ex));
 
     public static void LogDebugToConsole(string message)
     {
