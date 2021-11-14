@@ -593,11 +593,12 @@ namespace CozyBot
 
         if (!matchedKeysList.Any())
         {
-          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено в ключах за запитом: `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
+          await msg.Channel.SendMessageAsyncSafe($"Не знайдено **ключів** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
           return;
         }
+        await msg.Channel.SendMessageAsyncSafe($"Знайдено **ключі** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
 
-        string output = $"За запитом `{regexStr}` в ключах знайдено наступне:{Environment.NewLine}```";
+        string output = $"Результати пошуку **ключів** за запитом `{regexStr}`:{Environment.NewLine}```";
         List<string> outputMsgs = new List<string>();
         foreach (var key in matchedKeysList)
         {

@@ -394,7 +394,9 @@ namespace CozyBot
 
         if (matchesDict.Count != 0)
         {
-          string output = $"**Результати пошуку в цитатах за запитом: `{regexStr}`:**";
+          await msg.Channel.SendMessageAsyncSafe($"Знайдено **цитати** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
+
+          string output = $"**Результати пошуку **цитат** за запитом: `{regexStr}`:**";
           List<string> outputMsgs = new List<string>();
           foreach (var kvp in matchesDict)
           {
@@ -415,7 +417,7 @@ namespace CozyBot
             await dm.SendMessageAsync(message).ConfigureAwait(false);
         }
         else
-          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено в цитатах за запитом: `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
+          await msg.Channel.SendMessageAsyncSafe($"Не знайдено **цитат** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
       }
       catch (Exception ex)
       {
