@@ -586,7 +586,18 @@ namespace CozyBot
           return;
         }
 
-        Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant);
+        Regex regex;
+        try
+        {
+          regex = new Regex(regexStr, RegexOptions.CultureInvariant);
+        }
+        catch (ArgumentException ex)
+        {
+          BotHelper.LogExceptionToConsole($"[WARNING]{logPrefix} Malformed regex \"{regexStr}\".", ex);
+          await msg.Channel.SendMessageAsyncSafe($"Що це за хуйня?? {regexStr} {EmojiCodes.Tomas}").ConfigureAwait(false);
+          return;
+        }
+
         var matchedKeysList = RPKeyListGenerator(GetRootByKey(String.Empty), String.Empty, true).Where(key => regex.IsMatch(key)).ToList();
 
         BotHelper.LogDebugToConsole($"{logPrefix} Number of matches: {matchedKeysList.Count} for regex \"{regexStr}\".");
@@ -616,12 +627,12 @@ namespace CozyBot
 
         var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
         foreach (var message in outputMsgs)
-          await dm.SendMessageAsync(message).ConfigureAwait(false);
+          await dm.SendMessageAsyncSafe(message).ConfigureAwait(false);
         //await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"{logPrefix} Command failed. Query=\"{regexStr}\"", ex);
+        BotHelper.LogExceptionToConsole($"[WARNING]{logPrefix} Command failed. Query=\"{regexStr}\"", ex);
         throw;
       }
     }

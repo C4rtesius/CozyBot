@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
+using Discord;
 using Discord.Rest;
 using Discord.WebSocket;
 
@@ -21,6 +22,21 @@ namespace CozyBot
       catch (Exception ex)
       {
         LogExceptionToConsole($"[WARNING] Message send failed in channel: {channel.Name}.", ex);
+        return null;
+      }
+    }
+
+    public static async Task<IUserMessage> SendMessageAsyncSafe(this IDMChannel channel, string content)
+    {
+      try
+      {
+        if (channel != null && !String.IsNullOrEmpty(content))
+          return await channel.SendMessageAsync(content).ConfigureAwait(false);
+        return null;
+      }
+      catch (Exception ex)
+      {
+        LogExceptionToConsole($"[WARNING] Message send failed in channel: {channel.Recipient.Username}#{channel.Recipient.Discriminator}.", ex);
         return null;
       }
     }

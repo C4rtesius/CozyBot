@@ -321,10 +321,10 @@ namespace CozyBot
       output += @"```";
       outputMsgs.Add(output);
 
-      var ch = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
 
       foreach (var outputMsg in outputMsgs)
-        await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
+        await dm.SendMessageAsyncSafe(outputMsg).ConfigureAwait(false);
 
       await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }
@@ -341,6 +341,19 @@ namespace CozyBot
         if (regexStr.Length > 200) // unreasonably long regex
         {
           await msg.Channel.SendMessageAsyncSafe($"Занадто довгий запит: `{regexStr}` {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+          return;
+        }
+
+        // init regex before starting waiter, as regex can be malformed
+        Regex regex;
+        try
+        {
+          regex = new Regex(regexStr, RegexOptions.CultureInvariant | RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        }
+        catch (ArgumentException ex)
+        {
+          BotHelper.LogExceptionToConsole($"[WARNING]{cmdPrefix} Malformed regex \"{regexStr}\".", ex);
+          await msg.Channel.SendMessageAsyncSafe($"Що це за хуйня?? {EmojiCodes.Tomas} `{regexStr}`").ConfigureAwait(false);
           return;
         }
 
@@ -363,7 +376,6 @@ namespace CozyBot
           await waitMsg.ModifyAsync(p => { p.Content = $"{content}{Environment.NewLine}Пошук закінчено. {EmojiCodes.Picardia}"; }).ConfigureAwait(false);
         });
 
-        Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant | RegexOptions.Multiline | RegexOptions.IgnoreCase);
         var itemsDict = new Dictionary<string, XElement>();
         var matchesDict = new Dictionary<string, string>();
         RPItemDictGenerator(GetRootByKey(String.Empty), String.Empty, itemsDict);
@@ -380,8 +392,8 @@ namespace CozyBot
           }
           catch (Exception ex)
           {
-            BotHelper.LogExceptionToConsole($"[{LogName}] Citation loading failed: {kvp.Value.Value}", ex);
-            throw;
+            BotHelper.LogExceptionToConsole($"[WARNING]{cmdPrefix} Citation loading failed: {kvp.Key} - {kvp.Value.Value}", ex);
+            continue;
           }
 
           if (citation.Length > _msgLengthLimit || !regex.IsMatch(citation))
@@ -416,17 +428,16 @@ namespace CozyBot
 
           var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
           foreach (var message in outputMsgs)
-            await dm.SendMessageAsync(message).ConfigureAwait(false);
+            await dm.SendMessageAsyncSafe(message).ConfigureAwait(false);
         }
         else
           await msg.Channel.SendMessageAsyncSafe($"Не знайдено **цитат** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"{cmdPrefix} Search failed for regex \"{regexStr}\".", ex);
+        BotHelper.LogExceptionToConsole($"[WARNING]{cmdPrefix} Search failed for regex \"{regexStr}\".", ex);
         throw;
       }
-
       BotHelper.LogDebugToConsole($"{cmdPrefix} Passing control to keys search.");
       await base.SearchCommand(msg).ConfigureAwait(false);
     }
@@ -484,7 +495,7 @@ namespace CozyBot
 
       var ch = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
       foreach (var outputMsg in outputMsgs)
-        await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
+        await ch.SendMessageAsyncSafe(outputMsg).ConfigureAwait(false);
 
       await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }

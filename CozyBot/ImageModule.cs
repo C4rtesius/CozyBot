@@ -297,10 +297,10 @@ namespace CozyBot
       output += "```";
       outputMsgs.Add(output);
 
-      var ch = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
 
       foreach (var outputMsg in outputMsgs)
-        await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
+        await dm.SendMessageAsyncSafe(outputMsg).ConfigureAwait(false);
 
       output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
 
