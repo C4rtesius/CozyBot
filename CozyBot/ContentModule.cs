@@ -189,12 +189,10 @@ namespace CozyBot
 
       if (_configEl.Element(ModuleXmlName) == null)
       {
-        XElement moduleConfigEl =
-            new XElement(ModuleXmlName,
-                new XAttribute("on", Boolean.FalseString),
-                new XAttribute("prefix", _defaultPrefix),
-                ModuleConfigFilePath
-            );
+        XElement moduleConfigEl = new XElement(ModuleXmlName,
+                                               new XAttribute("on", Boolean.FalseString),
+                                               new XAttribute("prefix", _defaultPrefix),
+                                               ModuleConfigFilePath);
 
         _configEl.Add(moduleConfigEl);
       }

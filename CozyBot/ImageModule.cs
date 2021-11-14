@@ -1,12 +1,12 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Xml.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 using Discord;
@@ -71,7 +71,8 @@ namespace CozyBot
       //"vlist", not implemented yet
       "help",
       "cfg",
-      "del"
+      "del",
+      "search"
     };
 
     /// <summary>
@@ -118,6 +119,17 @@ namespace CozyBot
         Directory.CreateDirectory(Path.Combine(_guildPath, _moduleFolder));
 
       _ratelimitDict = new ConcurrentDictionary<string, Task>();
+    }
+
+    protected override void GenerateUseCommands(List<ulong> perms)
+    {
+      base.GenerateUseCommands(perms);
+      List<ulong> allListPerms = new List<ulong>(_adminIds);
+
+      allListPerms.AddRange(perms);
+      Rule vlistRule = RuleGenerator.HasRoleByIds(allListPerms) & RuleGenerator.PrefixatedCommand(_prefix, "search");
+
+      _useCommands.Add(new BotCommand($"{StringID}-vlistcmd", vlistRule, SearchCommand));
     }
 
     protected override Func<SocketMessage, Task> UseCommandGenerator(string key)
@@ -267,10 +279,10 @@ namespace CozyBot
 
       // TODO : fix `c!list key` when key contains only 1 item
 
-      if (!Regex.IsMatch(msg.Content, ListCommandRegex))
-        return;
-
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+
+      if (!regexMatch.Success)
+        return;
 
       string keyStr = regexMatch.Groups["key"].Value;
       var listRoot = GetRootByKey(keyStr);
@@ -415,6 +427,53 @@ namespace CozyBot
       output += $"```{Environment.NewLine}{EmojiCodes.Pepe}";
 
       await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
+    }
+
+    protected virtual async Task SearchCommand(SocketMessage msg)
+    {
+      var regexStr = msg.Content.Replace($"{_prefix}search", String.Empty, StringComparison.InvariantCulture).TrimStart();
+      try
+      {
+        if (regexStr.Length == 0)
+          return;
+        if (regexStr.Length > 200) // unreasonably long regex
+        {
+          await msg.Channel.SendMessageAsyncSafe($"Занадто довгий запит: {regexStr} {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+          return;
+        }
+
+        Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant);
+        var matchedKeysList = RPKeyListGenerator(GetRootByKey(String.Empty), String.Empty, false).Where(key => regex.IsMatch(key)).ToList();
+
+        if (!matchedKeysList.Any())
+        {
+          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено за запитом: {regexStr} {EmojiCodes.Pepe}").ConfigureAwait(false);
+          return;
+        }
+
+        string output = $"За запитом {regexStr} знайдено наступне:{Environment.NewLine}```";
+        List<string> outputMsgs = new List<string>();
+        foreach (var key in matchedKeysList)
+        {
+          if (output.Length + key.Length < _msgLengthLimit)
+            output = String.Concat(output, $"{key}{Environment.NewLine}");
+          else
+          {
+            output = String.Concat(output, "```");
+            outputMsgs.Add(output);
+            output = $"```{Environment.NewLine}";
+          }
+        }
+
+        var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+        foreach (var message in outputMsgs)
+          await dm.SendMessageAsync(message).ConfigureAwait(false);
+      }
+      catch (Exception ex)
+      {
+        BotHelper.LogExceptionToConsole($"[{LogName}][SEARCH] Command failed. Query=\"{regexStr}\"", ex);
+        throw;
+      }
     }
 
     /// <summary>

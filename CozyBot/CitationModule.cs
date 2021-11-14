@@ -76,7 +76,8 @@ namespace CozyBot
       "vlist",
       "help",
       "cfg",
-      "del"
+      "del",
+      "search"
     };
 
     /// <summary>
@@ -280,9 +281,9 @@ namespace CozyBot
       // Add verbose listing command
       List<ulong> allListPerms = new List<ulong>(_adminIds);
       allListPerms.AddRange(perms);
-      Rule listRule = RuleGenerator.HasRoleByIds(allListPerms) & RuleGenerator.PrefixatedCommand(_prefix, "vlist");
+      Rule vlistRule = RuleGenerator.HasRoleByIds(allListPerms) & RuleGenerator.PrefixatedCommand(_prefix, "vlist");
 
-      _useCommands.Add(new BotCommand($"{StringID}-vlistcmd", listRule, VerboseListCommand));
+      _useCommands.Add(new BotCommand($"{StringID}-vlistcmd", vlistRule, VerboseListCommand));
     }
 
     protected override async Task ListCommand(SocketMessage msg)
