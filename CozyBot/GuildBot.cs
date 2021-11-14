@@ -115,12 +115,10 @@ namespace CozyBot
 
     private void LoadConfig()
     {
-#if DEBUG
-      Console.WriteLine($"[DEBUG][GUILDBOT] _configPath: {_configPath}");
-      Console.WriteLine($"[DEBUG][GUILDBOT] Exists(_configPath): {File.Exists(_configPath)}");
+      BotHelper.LogDebugToConsole($"[GUILDBOT] _configPath: {_configPath}");
+      BotHelper.LogDebugToConsole($"[GUILDBOT] Exists(_configPath): {File.Exists(_configPath)}");
       if (File.Exists(_configPath))
-        Console.WriteLine($"[DEBUG][GUILDBOT] Full Path: {Path.GetFullPath(_configPath)}");
-#endif
+        BotHelper.LogDebugToConsole($"[GUILDBOT] Full Path: {Path.GetFullPath(_configPath)}");
       using (var stream = File.Open(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         _config = XDocument.Load(stream);
 
@@ -250,9 +248,9 @@ namespace CozyBot
               BotHelper.LogExceptionToConsole($"[GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}", ex);
               continue;
             }
-#if DEBUG
-            Console.WriteLine($"[DEBUG][GUILDBOT] Downloaded {msgList.Count} messages.");
-#endif
+
+            BotHelper.LogDebugToConsole($"[GUILDBOT][EMOJISTATS] Downloaded {msgList.Count} messages.");
+
             if (msgList.Count == listCount)
               break;
           }

@@ -7,6 +7,8 @@ namespace CozyBot
 {
   static class BotHelper
   {
+    private static object _consoleLock = new object();
+
     public static async Task SendMessageAsyncSafe(ISocketMessageChannel channel, string content)
     {
       try
@@ -30,7 +32,20 @@ namespace CozyBot
 
     public static void LogExceptionToConsole(string message, Exception ex)
     {
-      Console.WriteLine(BuildExceptionMessage(message, ex));
+      WriteToConsole(BuildExceptionMessage(message, ex));
+    }
+
+    public static void LogDebugToConsole(string message)
+    {
+#if DEBUG
+      WriteToConsole($"[DEBUG]{message}");
+#endif
+    }
+
+    public static void WriteToConsole(string message)
+    {
+      lock(_consoleLock)
+        Console.WriteLine(message);
     }
   }
 }

@@ -38,7 +38,7 @@ namespace CozyBot
       }
       catch
       {
-        Console.WriteLine("[CORE][FATAL] Shutting down.");
+        BotHelper.WriteToConsole("[FATAL][CORE] Shutting down.");
       }
     }
 
@@ -48,10 +48,9 @@ namespace CozyBot
     {
       try
       {
-#if DEBUG
-        Console.WriteLine($"[DEBUG][CORE] Current working dir :{Directory.GetCurrentDirectory()}");
-        Console.WriteLine($"              Current AppDomain BaseDirectory :{AppDomain.CurrentDomain.BaseDirectory}");
-#endif
+        BotHelper.LogDebugToConsole(String.Join(Environment.NewLine,
+                                                $"[CORE] Current working dir :{Directory.GetCurrentDirectory()}",
+                                                $"Current AppDomain BaseDirectory :{AppDomain.CurrentDomain.BaseDirectory}"));
         _guildBotsDict = new Dictionary<ulong, GuildBot>();
 
         _client = new DiscordSocketClient();
@@ -78,9 +77,8 @@ namespace CozyBot
 
     private void OnCtrlEvent(CtrlType type)
     {
-#if DEBUG
-      Console.WriteLine("[DEBUG][CORE] ProcessExit triggered.");
-#endif
+      BotHelper.LogDebugToConsole("[CORE] ProcessExit triggered.");
+
       _ctrlEventHandler.Invoke(type);
       _mre.Set();
     }
@@ -101,21 +99,18 @@ namespace CozyBot
         string guildConfigPath = Path.Combine(guildPath, "config.xml");
         await Task.Run(() =>
         {
-#if DEBUG
-          Console.WriteLine($"[DEBUG][CORE] guildPath:{guildPath}");
-#endif
+          BotHelper.LogDebugToConsole($"[CORE] guildPath:{guildPath}");
+
           if (!Directory.Exists(guildPath))
           {
-#if DEBUG
-            Console.WriteLine($"[DEBUG][CORE] Creating guildPath:{guildPath}");
-#endif
+            BotHelper.LogDebugToConsole($"[CORE] Creating guildPath:{guildPath}");
+
             Directory.CreateDirectory(guildPath);
           }
           if (!File.Exists(guildConfigPath))
           {
-#if DEBUG
-            Console.WriteLine($"[DEBUG][CORE] Creating guild config:{guildConfigPath}");
-#endif
+            BotHelper.LogDebugToConsole($"[CORE] Creating guild config:{guildConfigPath}");
+
             GetDefaultGuildConfig().Save(guildConfigPath);
           }
         }).ConfigureAwait(false);
@@ -150,9 +145,8 @@ namespace CozyBot
     {
       await Task.Run(() =>
       {
-#if DEBUG
-        Console.WriteLine($"[DEBUG][CORE] Load Config Path :{Path.Combine(_appBaseDirectory, _configFileName)}");
-#endif
+        BotHelper.LogDebugToConsole($"[CORE] Load Config Path :{Path.Combine(_appBaseDirectory, _configFileName)}");
+
         if (File.Exists(Path.Combine(_appBaseDirectory, _configFileName)))
           using (var stream = File.Open(Path.Combine(_appBaseDirectory, _configFileName), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             _config = XDocument.Load(stream);
@@ -176,7 +170,7 @@ namespace CozyBot
 
     private Task Log(LogMessage logMsg)
     {
-      Console.WriteLine(logMsg.ToString());
+      BotHelper.WriteToConsole(logMsg.ToString());
       return Task.CompletedTask;
     }
 

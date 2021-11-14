@@ -258,10 +258,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        Console.WriteLine(String.Join(Environment.NewLine,
-                                      $"[EXCEPT][{_stringID.ToUpper()}] Config save failed: {msg.Content}",
-                                      $"Exception caught: {ex.Message}",
-                                      $"Stack trace: {ex.StackTrace}"));
+        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Config save failed: {msg.Content}", ex);
         throw;
       }
 
