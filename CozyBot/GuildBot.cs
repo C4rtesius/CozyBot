@@ -287,6 +287,8 @@ namespace CozyBot
               {
                 foreach (var message in messagesPerCore)
                 {
+                  if (message.Author.IsBot || message.Author.IsWebhook)
+                    continue;
                   if (message is IUserMessage um)
                     foreach (var reaction in um.Reactions)
                       if (emoteReacDict.ContainsKey(reaction.Key))
