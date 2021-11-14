@@ -439,22 +439,22 @@ namespace CozyBot
           return;
         if (regexStr.Length > 200) // unreasonably long regex
         {
-          await msg.Channel.SendMessageAsyncSafe($"Занадто довгий запит: {regexStr} {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+          await msg.Channel.SendMessageAsyncSafe($"Занадто довгий запит: `{regexStr}` {EmojiCodes.WaitWhat}").ConfigureAwait(false);
           return;
         }
 
         Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant);
         var matchedKeysList = RPKeyListGenerator(GetRootByKey(String.Empty), String.Empty, false).Where(key => regex.IsMatch(key)).ToList();
 
-        BotHelper.LogDebugToConsole($"{logPrefix} Number of matches: {matchedKeysList.Count} for regex {regexStr}.");
+        BotHelper.LogDebugToConsole($"{logPrefix} Number of matches: {matchedKeysList.Count} for regex \"{regexStr}\".");
 
         if (!matchedKeysList.Any())
         {
-          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено за запитом: {regexStr} {EmojiCodes.Pepe}").ConfigureAwait(false);
+          await msg.Channel.SendMessageAsyncSafe($"Нічого не знайдено за запитом: `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
           return;
         }
 
-        string output = $"За запитом {regexStr} знайдено наступне:{Environment.NewLine}```";
+        string output = $"За запитом `{regexStr}` знайдено наступне:{Environment.NewLine}```";
         List<string> outputMsgs = new List<string>();
         foreach (var key in matchedKeysList)
         {
@@ -467,10 +467,13 @@ namespace CozyBot
             output = $"```{Environment.NewLine}";
           }
         }
+        output = String.Concat(output, "```");
+        outputMsgs.Add(output);
 
         var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
         foreach (var message in outputMsgs)
           await dm.SendMessageAsync(message).ConfigureAwait(false);
+        await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
       }
       catch (Exception ex)
       {
