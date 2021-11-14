@@ -65,8 +65,8 @@ namespace CozyBot
 
     public GuildBot(SocketGuild guild, string guildPath, ulong clientId)
     {
-      _guild = guild ?? throw new NullReferenceException($"{nameof(guild)} cannot be null!");
-      _guildPath = guildPath ?? throw new ArgumentNullException($"{nameof(guildPath)} cannot be null!");
+      _guild = Guard.NonNull(guild, nameof(guild));
+      _guildPath = Guard.NonNull(guildPath, nameof(guildPath));
       _configPath = Path.Combine(_guildPath, "config.xml");
       _clientId = clientId;
 
@@ -77,14 +77,10 @@ namespace CozyBot
 
       LoadConfig();
 
-      foreach (var role in guild.Roles)
-        if (role.Permissions.Administrator)
-          _adminIds.Add(role.Id);
-
+      _adminIds.AddRange(guild.Roles.Where(r => r.Permissions.Administrator).Select(r => r.Id));
       _modulesDict = new Dictionary<string, IBotModule>();
 
       LoadDefaultCommands();
-
       LoadModules();
     }
 
@@ -126,9 +122,7 @@ namespace CozyBot
         throw new ApplicationException("Configuration file not found.");
 
       XElement prefixEl = _config.Root.Element("coreprefix");
-      if (prefixEl == null)
-        throw new ApplicationException("Configuration file is missing prefix data.");
-      if (String.IsNullOrEmpty(prefixEl.Value))
+      if (prefixEl == null || String.IsNullOrEmpty(prefixEl.Value))
         throw new ApplicationException("Configuration file is missing prefix data.");
 
       _prefix = prefixEl.Value;
@@ -145,7 +139,6 @@ namespace CozyBot
           _modulesDict.Add(citationModule.StringID, citationModule);
           citationModule.GuildBotConfigChanged += CitationModule_ConfigChanged;
         }
-
         if (modulesEl.Element("userimg") != null)
         {
           ImageModule imageModule = new ImageModule(modulesEl, _adminIds, _clientId, _guildPath);
@@ -184,6 +177,7 @@ namespace CozyBot
 
     private async Task EmojiStatsCmd(SocketMessage msg)
     {
+      string logPrefix = "[GUILDBOT][EMOJISTATS]";
       try
       {
         var sw = new System.Diagnostics.Stopwatch();
@@ -209,47 +203,61 @@ namespace CozyBot
 
         foreach (var textChannel in channels)
         {
-          IMessage lastMsg = null;
+          IMessage lastSeenMsg = null;
 
           int q = 0;
+
+          BotHelper.LogDebugToConsole($"{logPrefix} Started processing of #{textChannel.Name}.");
 
           var asyncMessages = textChannel.GetMessagesAsync();
           var msgList = new List<IMessage>();
           try
           {
             await foreach (var messages in asyncMessages)
+            {
               foreach (var message in messages)
               {
+                lastSeenMsg = message;
+                if (message.Timestamp < timeBoundary)
+                  break;
                 msgList.Add(message);
-                lastMsg = message;
               }
+              if (lastSeenMsg.Timestamp < timeBoundary)
+                break;
+            }
           }
           catch (Exception ex)
           {
-            BotHelper.LogExceptionToConsole($"[GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}", ex);
+            BotHelper.LogExceptionToConsole($"{logPrefix} Fetch Messages failed : #{textChannel.Name}", ex);
             continue;
           }
 
-          int listCount;
-          while (lastMsg.Timestamp > timeBoundary)
+          while (lastSeenMsg.Timestamp > timeBoundary)
           {
+            int listCount;
             try
             {
               listCount = msgList.Count;
-              await foreach (var messages in textChannel.GetMessagesAsync(lastMsg, Direction.Before))
+              await foreach (var messages in textChannel.GetMessagesAsync(lastSeenMsg, Direction.Before))
+              {
                 foreach (var message in messages)
                 {
+                  lastSeenMsg = message;
+                  if (message.Timestamp < timeBoundary)
+                    break;
                   msgList.Add(message);
-                  lastMsg = message;
                 }
+                if (lastSeenMsg.Timestamp < timeBoundary)
+                  break;
+              }
             }
             catch (Exception ex)
             {
-              BotHelper.LogExceptionToConsole($"[GUILDBOT][EMOJISTATS] Fetch Messages failed : {textChannel.Name}", ex);
+              BotHelper.LogExceptionToConsole($"{logPrefix} Fetch Messages failed : #{textChannel.Name}", ex);
               continue;
             }
 
-            BotHelper.LogDebugToConsole($"[GUILDBOT][EMOJISTATS] Downloaded {msgList.Count} messages.");
+            BotHelper.LogDebugToConsole($"{logPrefix} Downloaded {msgList.Count} messages from #{textChannel.Name}.");
 
             if (msgList.Count == listCount)
               break;
@@ -296,11 +304,12 @@ namespace CozyBot
               }
               catch (Exception ex)
               {
-                BotHelper.LogExceptionToConsole($"[GUILDBOT][EMOJISTATS] Processing Messages failed : {textChannel.Name}", ex);
+                BotHelper.LogExceptionToConsole($"{logPrefix} Processing Messages failed : #{textChannel.Name}", ex);
               }
             }));
 
           await Task.WhenAll(tasklist).ConfigureAwait(false);
+          BotHelper.LogDebugToConsole($"{logPrefix} Processed messages from #{textChannel.Name}.");
         }
 
         var emoteTotalDict = new Dictionary<Discord.IEmote, int>(emoteReacDict);
@@ -330,7 +339,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole("[GUILDBOT][EMOJISTATS]. Command failed:", ex);
+        BotHelper.LogExceptionToConsole($"{logPrefix}. Command failed:", ex);
         throw;
       }
     }
@@ -369,22 +378,18 @@ namespace CozyBot
           Regex diceregex = new Regex(@"^(?<dicenum>\d+)[dD](?<dicesize>\d+)$", RegexOptions.Compiled);
           var dicematch = diceregex.Match(words[1]);
 
-          if (dicematch != Match.Empty)
+          if (dicematch.Success)
           {
             var diceGroups = dicematch.Groups;
 
-            if (!Int32.TryParse(diceGroups["dicenum"].Value, out num))
-              return;
-            if (!Int32.TryParse(diceGroups["dicesize"].Value, out size))
+            if (!Int32.TryParse(diceGroups["dicenum"].Value, out num) || !Int32.TryParse(diceGroups["dicesize"].Value, out size))
               return;
           }
           else if (!Int32.TryParse(words[1], out size))
             return;
           break;
         case 3:
-          if (!Int32.TryParse(words[1], out num))
-            return;
-          if (!Int32.TryParse(words[2], out size))
+          if (!Int32.TryParse(words[1], out num) || !Int32.TryParse(words[2], out size))
             return;
           break;
         default:
@@ -470,7 +475,7 @@ namespace CozyBot
       foreach (var moduleStringID in _modulesDict.Keys)
         if (modulesToProcess.Contains(moduleStringID))
           foreach (var moduleEl in modulesElList)
-            if (String.Compare(moduleEl.Name.ToString(), _modulesDict[moduleStringID].ModuleXmlName, StringComparison.InvariantCulture) == 0)
+            if (_modulesDict[moduleStringID].ModuleXmlName.ExactAs(moduleEl.Name.ToString()))
               if (Boolean.TryParse(moduleEl.Attribute("on").Value, out bool state))
               {
                 if (state == newState)

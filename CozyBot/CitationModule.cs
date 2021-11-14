@@ -69,7 +69,7 @@ namespace CozyBot
     /// <summary>
     /// Forbidden keys (because they are valid commands).
     /// </summary>
-    protected string[] _blacklistedKeys = new string[]
+    protected string[] _blacklistedKeys =
     {
       "add",
       "list",
@@ -129,7 +129,8 @@ namespace CozyBot
     {
       return async (msg) =>
       {
-        await msg.DeleteAsyncSafe($"[{LogName}][USE][key={key}]").ConfigureAwait(false);
+        string logPrefix = $"[{LogName}][USE][key={key}]";
+        await msg.DeleteAsyncSafe(logPrefix).ConfigureAwait(false);
 
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
         if (_ratelimitDict.ContainsKey(dictKey))
@@ -144,18 +145,18 @@ namespace CozyBot
         XElement citationEl = citationsList[_rnd.Next() % citationsList.Count];
         string citationFileName = citationEl.Value;
 
-        string citation = String.Empty;
+        string citation;
         try
         {
           citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, citationFileName)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{LogName}] Citation retrieval failed: {key}", ex);
+          BotHelper.LogExceptionToConsole($"{logPrefix} Citation retrieval failed.", ex);
           throw;
         }
 
-        if (citation.Length > _msgLengthLimit) // in case quote
+        if (citation.Length > _msgLengthLimit) // in a case citation is longer than limit - ignore it
           return;
 
         try
@@ -164,19 +165,17 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{LogName}] Citation send failed: {key}", ex);
+          BotHelper.LogExceptionToConsole($"{logPrefix} Citation send failed.", ex);
           throw;
         }
 
         // Increment usage count.
 
-        if (citationEl.Attribute(_usageCountAttributeName) != null)
-          citationEl.Attribute(_usageCountAttributeName).Value =
-            Int32.TryParse(citationEl.Attribute(_usageCountAttributeName).Value, out int uses) ?
-            $"{++uses}" :
-            "1";
+        var usageAttribute = citationEl.Attribute(_usageCountAttributeName);
+        if (usageAttribute != null)
+          usageAttribute.Value = Int32.TryParse(usageAttribute.Value, out int uses) ? $"{++uses}" : "1";
         else
-          citationEl.Add(new XAttribute(_usageCountAttributeName, $"{1}"));
+          citationEl.Add(new XAttribute(_usageCountAttributeName, "1"));
 
         await ModuleConfigChanged().ConfigureAwait(false);
         Reconfigure(_configEl);
@@ -212,22 +211,20 @@ namespace CozyBot
     /// <returns>Async Task performing citation addition logic.</returns>
     protected override async Task AddCommand(SocketMessage msg)
     {
-      await msg.DeleteAsyncSafe($"[{LogName}][ADD]").ConfigureAwait(false);
-
-      if (!Regex.IsMatch(msg.Content, AddCommandRegex))
-        return;
+      string logPrefix = $"[{LogName}][ADD]";
+      await msg.DeleteAsyncSafe(logPrefix).ConfigureAwait(false);
 
       var regexMatch = Regex.Match(msg.Content, AddCommandRegex);
 
+      if (!regexMatch.Success)
+        return;
+
       string[] keys = regexMatch.Groups["key"].Value.Split('.');
 
-      // check for blacklisted keys
-      foreach (var blKey in _blacklistedKeys)
-        if (String.Compare(keys[0], blKey, StringComparison.InvariantCulture) == 0)
-          return;
+      if (_blacklistedKeys.Any(blKey => blKey.ExactAs(keys[0])))
+        return;
 
       Guid newItemGuid = Guid.NewGuid();
-
       string newItemFileName = $"{newItemGuid}.dat";
 
       try
@@ -236,27 +233,20 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}] Citation save failed: {msg.Content}", ex);
+        BotHelper.LogExceptionToConsole($"{logPrefix} Citation save failed: {msg.Content}", ex);
         throw;
       }
 
-      XElement newItem =
-        new XElement(
-          "item",
-          new XAttribute("name", $"{newItemGuid}"),
-          newItemFileName
-        );
+      XElement newItem = new XElement("item",
+                                      new XAttribute("name", $"{newItemGuid}"),
+                                      newItemFileName);
 
       XElement currentEl = _moduleConfig.Root;
 
       foreach (var key in keys)
       {
-        XElement newEl = currentEl.Elements("key").FirstOrDefault(el =>
-        {
-          if (el.Attribute("name") != null && String.Compare(el.Attribute("name").Value, key, StringComparison.InvariantCulture) == 0)
-            return true;
-          return false;
-        });
+        XElement newEl = currentEl.Elements("key").FirstOrDefault(
+          el => el.Attribute("name") != null && key.ExactAs(el.Attribute("name").Value));
 
         if (newEl == null)
         {
@@ -265,7 +255,6 @@ namespace CozyBot
         }
         currentEl = newEl;
       }
-
       currentEl.Add(newItem);
 
       try
@@ -274,7 +263,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}] Config save failed: {msg.Content}", ex);
+        BotHelper.LogExceptionToConsole($"{logPrefix} Config save failed.", ex);
         throw;
       }
 
@@ -300,10 +289,10 @@ namespace CozyBot
     {
       await msg.DeleteAsyncSafe($"[{LogName}][LIST]").ConfigureAwait(false);
 
-      if (!Regex.IsMatch(msg.Content, ListCommandRegex))
-        return;
-
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+
+      if (!regexMatch.Success)
+        return;
 
       string keyStr = regexMatch.Groups["key"].Value;
       var listRoot = GetRootByKey(keyStr);
@@ -315,7 +304,7 @@ namespace CozyBot
                                     $":**{Environment.NewLine}```");
 
       var list = RPKeyListGenerator(listRoot,
-                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : keyStr + ".",
+                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.",
                                     false);
       if (list.Count == 0)
         return;
@@ -324,12 +313,12 @@ namespace CozyBot
       foreach (var key in list)
       {
         if (output.Length + key.Length < _msgLengthLimit)
-          output += Environment.NewLine + key;
+          output += $"{Environment.NewLine}{key}";
         else
         {
-          output += @"```";
+          output += "```";
           outputMsgs.Add(output);
-          output = @"```" + key;
+          output = $"```{key}";
         }
       }
 
@@ -348,10 +337,11 @@ namespace CozyBot
     {
       await msg.DeleteAsyncSafe($"[{LogName}][VLIST]").ConfigureAwait(false);
 
-      if (!Regex.IsMatch(msg.Content, ListCommandRegex))
+      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+
+      if (!regexMatch.Success)
         return;
 
-      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
       var cmdKey = regexMatch.Groups["key"].Value;
 
       var listRoot = GetRootByKey(cmdKey);
@@ -359,14 +349,11 @@ namespace CozyBot
 
       RPItemDictGenerator(listRoot, String.IsNullOrWhiteSpace(cmdKey) ? String.Empty : cmdKey + ".", itemsDict);
 
-      var ch = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-
       List<string> outputMsgs = new List<string>();
 
       string output = String.Concat("**Розширений список цитат",
                                     String.IsNullOrWhiteSpace(cmdKey) ? String.Empty : @$" за ключем `{cmdKey}`",
                                     $":** {Environment.NewLine}");
-
 
       foreach (var kvp in itemsDict)
       {
@@ -397,6 +384,7 @@ namespace CozyBot
 
       outputMsgs.Add(output);
 
+      var ch = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
       foreach (var outputMsg in outputMsgs)
         await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
 
@@ -424,12 +412,12 @@ namespace CozyBot
         IsInline = false,
         Name = "Команди цитатного модуля",
         Value = String.Join(Environment.NewLine,
-          @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
-          @$"{_prefix}add автор цитата - записати у файл автора цитату",
-          @$"{_prefix}del автор - видалити цитати автора",
-          @$"{_prefix}list - отримати список доступних авторів у Приватних Повідомленнях",
-          @$"{_prefix}автор - отримати цитату автора",
-          @$"{_prefix}help - цей список команд")
+                            @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
+                            @$"{_prefix}add автор цитата - записати у файл автора цитату",
+                            @$"{_prefix}del автор - видалити цитати автора",
+                            @$"{_prefix}list - отримати список доступних авторів у Приватних Повідомленнях",
+                            @$"{_prefix}автор - отримати цитату автора",
+                            @$"{_prefix}help - цей список команд")
       };
 
       var efob = new EmbedFooterBuilder
@@ -458,10 +446,10 @@ namespace CozyBot
 
     protected override async Task DeleteCommand(SocketMessage msg)
     {
-      if (!Regex.IsMatch(msg.Content, ListCommandRegex))
-        return;
-
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+
+      if (!regexMatch.Success)
+        return;
 
       string key = regexMatch.Groups["key"].Value;
       if (String.IsNullOrWhiteSpace(key))
@@ -470,7 +458,7 @@ namespace CozyBot
       var listRoot = GetRootByKey(key);
       var delDict = new Dictionary<string, XElement>();
 
-      RPItemDictGenerator(listRoot, key + ".", delDict);
+      RPItemDictGenerator(listRoot, $"{key}.", delDict);
 
       List<string> citationsDeleted = new List<string>();
 
@@ -484,7 +472,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{LogName}] Citation deletion failed: {key} -> {delKVP.Value.Value}", ex);
+          BotHelper.LogExceptionToConsole($"[{LogName}][DEL] Citation deletion failed: {key} -> {delKVP.Value.Value}", ex);
           throw;
         }
       }
@@ -499,7 +487,7 @@ namespace CozyBot
 
         // TODO: what if deleted list is longer than limit?
 
-        output += "```" + Environment.NewLine + EmojiCodes.Pepe;
+        output += $"```{Environment.NewLine}{EmojiCodes.Pepe}";
 
         await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
       }
@@ -515,14 +503,11 @@ namespace CozyBot
     {
       try
       {
-        new XDocument(
-            new XElement(ModuleXmlName,
-                new XAttribute("cfgPerm", ""),
-                new XAttribute("addPerm", ""),
-                new XAttribute("usePerm", ""),
-                new XAttribute("delPerm", "")
-            )
-        ).Save(filePath);
+        new XDocument(new XElement(ModuleXmlName,
+                                   new XAttribute("cfgPerm", String.Empty),
+                                   new XAttribute("addPerm", String.Empty),
+                                   new XAttribute("usePerm", String.Empty),
+                                   new XAttribute("delPerm", String.Empty))).Save(filePath);
       }
       catch (Exception ex)
       {

@@ -199,9 +199,8 @@ namespace CozyBot
 
       string[] keys = regexMatch.Groups["key"].Value.Split('.');
 
-      foreach (var blKey in _blacklistedKeys) // check for blacklisted keys
-        if (String.Compare(keys[0], blKey, StringComparison.InvariantCulture) == 0)
-          return;
+      if (_blacklistedKeys.Any(blKey => blKey.ExactAs(keys[0])))
+        return;
 
       XElement newItem;
 
@@ -232,8 +231,8 @@ namespace CozyBot
 
       foreach (var key in keys)
       {
-        XElement newEl = currentEl.Elements("key").FirstOrDefault(el =>
-          el.Attribute("name") != null && String.Compare(el.Attribute("name").Value, key, StringComparison.InvariantCulture) == 0);
+        XElement newEl = currentEl.Elements("key").FirstOrDefault(
+          el => el.Attribute("name") != null && key.ExactAs(el.Attribute("name").Value));
 
         if (newEl == null)
         {

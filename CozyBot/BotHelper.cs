@@ -56,5 +56,12 @@ namespace CozyBot
       lock(_consoleLock)
         Console.WriteLine(message);
     }
+
+    public static bool ExactAs(this string caller, string other)
+    {
+      if (String.IsNullOrEmpty(caller) || String.IsNullOrEmpty(other))
+        return false;
+      return String.Compare(caller, other, StringComparison.InvariantCulture) == 0;
+    }
   }
 }

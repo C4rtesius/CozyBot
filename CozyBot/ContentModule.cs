@@ -671,10 +671,7 @@ namespace CozyBot
     protected abstract Func<SocketMessage, Task> UseCommandGenerator(string key);
 
     private static XElement GetFirstOrDefaultSubElementByName(XElement rootEl, string elName, string subKey)
-    {
-      return rootEl.Elements(elName).FirstOrDefault(
-        el => el.Attribute("name") != null &&
-              String.Compare(el.Attribute("name").Value, subKey, StringComparison.InvariantCulture) == 0);
-    }
+      => rootEl.Elements(elName).FirstOrDefault(
+        el => el.Attribute("name") != null && subKey.ExactAs(el.Attribute("name").Value));
   }
 }
