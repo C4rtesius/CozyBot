@@ -587,7 +587,7 @@ namespace CozyBot
         }
 
         Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant);
-        var matchedKeysList = RPKeyListGenerator(GetRootByKey(String.Empty), String.Empty, false).Where(key => regex.IsMatch(key)).ToList();
+        var matchedKeysList = RPKeyListGenerator(GetRootByKey(String.Empty), String.Empty, true).Where(key => regex.IsMatch(key)).ToList();
 
         BotHelper.LogDebugToConsole($"{logPrefix} Number of matches: {matchedKeysList.Count} for regex \"{regexStr}\".");
 
