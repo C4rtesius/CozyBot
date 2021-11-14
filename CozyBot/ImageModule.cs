@@ -125,11 +125,10 @@ namespace CozyBot
     {
       base.GenerateUseCommands(perms);
       List<ulong> allListPerms = new List<ulong>(_adminIds);
-
       allListPerms.AddRange(perms);
-      Rule vlistRule = RuleGenerator.HasRoleByIds(allListPerms) & RuleGenerator.PrefixatedCommand(_prefix, "search");
+      Rule searchRule = RuleGenerator.HasRoleByIds(allListPerms) & RuleGenerator.PrefixatedCommand(_prefix, "search");
 
-      _useCommands.Add(new BotCommand($"{StringID}-vlistcmd", vlistRule, SearchCommand));
+      _useCommands.Add(new BotCommand($"{StringID}-search", searchRule, SearchCommand));
     }
 
     protected override Func<SocketMessage, Task> UseCommandGenerator(string key)
@@ -431,6 +430,8 @@ namespace CozyBot
 
     protected virtual async Task SearchCommand(SocketMessage msg)
     {
+      string logPrefix = $"[{LogName}][SEARCH]";
+      BotHelper.LogDebugToConsole($"{logPrefix} Entered search.");
       var regexStr = msg.Content.Replace($"{_prefix}search", String.Empty, StringComparison.InvariantCulture).TrimStart();
       try
       {
@@ -444,6 +445,8 @@ namespace CozyBot
 
         Regex regex = new Regex(regexStr, RegexOptions.CultureInvariant);
         var matchedKeysList = RPKeyListGenerator(GetRootByKey(String.Empty), String.Empty, false).Where(key => regex.IsMatch(key)).ToList();
+
+        BotHelper.LogDebugToConsole($"{logPrefix} Number of matches: {matchedKeysList.Count} for regex {regexStr}.");
 
         if (!matchedKeysList.Any())
         {
@@ -471,7 +474,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}][SEARCH] Command failed. Query=\"{regexStr}\"", ex);
+        BotHelper.LogExceptionToConsole($"{logPrefix} Command failed. Query=\"{regexStr}\"", ex);
         throw;
       }
     }
