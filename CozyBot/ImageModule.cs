@@ -124,15 +124,8 @@ namespace CozyBot
     {
       return async (msg) =>
       {
-        try
-        {
-          await msg.DeleteAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {key}", ex);
-          throw;
-        }
+        await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][USE]").ConfigureAwait(false);
+
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
         if (_ratelimitDict.ContainsKey(dictKey))
           return;
@@ -186,7 +179,7 @@ namespace CozyBot
     {
       if (File.Exists(filepath))
       {
-        await BotHelper.SendMessageAsyncSafe(sc, $"Пікча з такою назвою вже є {EmojiCodes.Tomas}").ConfigureAwait(false);
+        await sc.SendMessageAsyncSafe($"Пікча з такою назвою вже є {EmojiCodes.Tomas}").ConfigureAwait(false);
         return;
       }
 
@@ -194,7 +187,7 @@ namespace CozyBot
         using (FileStream fs = new FileStream(filepath, FileMode.Create, FileAccess.Write))
           await (await hc.GetAsync(new Uri(att.Url)).ConfigureAwait(false)).Content.CopyToAsync(fs).ConfigureAwait(false);
 
-      await BotHelper.SendMessageAsyncSafe(sc, "Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
+      await sc.SendMessageAsyncSafe("Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
     }
 
     protected override async Task AddCommand(SocketMessage msg)
@@ -264,29 +257,14 @@ namespace CozyBot
 
       Reconfigure(_configEl);
 
-      try
-      {
-        await msg.DeleteAsync().ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Channel.Name}", ex);
-        throw;
-      }
+      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][ADD]").ConfigureAwait(false);
     }
 
     protected override async Task ListCommand(SocketMessage msg)
     {
       // TODO : fix a bug with wrong `list` command output
-      try
-      {
-        await msg.DeleteAsync().ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Channel.Name}", ex);
-        throw;
-      }
+
+      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][LIST]").ConfigureAwait(false);
 
       // TODO : fix `c!list key` when key contains only 1 item
 
@@ -335,69 +313,61 @@ namespace CozyBot
 
       output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
 
-      await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
+      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
     }
 
     protected override async Task HelpCommand(SocketMessage msg)
     {
-      if (msg.Author is SocketGuildUser user)
+      if (!(msg.Author is SocketGuildUser user))
+        return;
+
+      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][HELP]").ConfigureAwait(false);
+
+      var guild = user.Guild;
+      string iconUrl = guild.IconUrl;
+
+      var eba = new EmbedAuthorBuilder
       {
-        try
-        {
-          await msg.DeleteAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Channel.Name}", ex);
-          throw;
-        }
+        Name = @"Shining Armor",
+        IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
+      };
 
-        var guild = user.Guild;
-        string iconUrl = guild.IconUrl;
+      var efb = new EmbedFieldBuilder
+      {
+        IsInline = false,
+        Name = "Команди пікчевого модуля",
+        Value = String.Join(Environment.NewLine,
+          @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
+          @$"{_prefix}add ключ [пікча] - додати пікчу з ключем",
+          @$"{_prefix}del ключ - видалити ключ та пов'язану з ним пікчу",
+          @$"{_prefix}list - отримати список доступних ключів у Приватних Повідомленнях",
+          @$"{_prefix}ключ - отримати пікчу за ключем",
+          @$"{_prefix} - отримати випадкову пікчу",
+          @$"{_prefix}help - цей список команд")
+      };
 
-        var eba = new EmbedAuthorBuilder
-        {
-          Name = @"Shining Armor",
-          IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
-        };
+      var efob = new EmbedFooterBuilder
+      {
+        Text = "Оффнуть картинки - еще не самое проблемное."
+      };
 
-        var efb = new EmbedFieldBuilder
-        {
-          IsInline = false,
-          Name = "Команди пікчевого модуля",
-          Value = String.Join(Environment.NewLine,
-                              @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
-                              @$"{_prefix}add ключ [пікча] - додати пікчу з ключем",
-                              @$"{_prefix}del ключ - видалити ключ та пов'язану з ним пікчу",
-                              @$"{_prefix}list - отримати список доступних ключів у Приватних Повідомленнях",
-                              @$"{_prefix}ключ - отримати пікчу за ключем",
-                              @$"{_prefix} - отримати випадкову пікчу",
-                              @$"{_prefix}help - цей список команд")
-        };
+      var eb = new EmbedBuilder
+      {
+        Author = eba,
+        Color = Color.Green,
+        ThumbnailUrl = iconUrl,
+        Title = "Довідка :",
+        Timestamp = DateTime.Now,
+        Footer = efob
+      };
 
-        var efob = new EmbedFooterBuilder
-        {
-          Text = "Оффнуть картинки - еще не самое проблемное."
-        };
+      eb.Fields.Add(efb);
 
-        var eb = new EmbedBuilder
-        {
-          Author = eba,
-          Color = Color.Green,
-          ThumbnailUrl = iconUrl,
-          Title = "Довідка :",
-          Timestamp = DateTime.Now,
-          Footer = efob
-        };
+      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
-        eb.Fields.Add(efb);
-
-        var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-        await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
-
-        string output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
-        await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
-      }
+      string output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
+      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
     }
 
     protected override async Task DeleteCommand(SocketMessage msg)
@@ -434,7 +404,7 @@ namespace CozyBot
 
       if (imgDeleted.Count == 0)
       {
-        await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+        await msg.Channel.SendMessageAsyncSafe($"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
         return;
       }
 
@@ -445,7 +415,7 @@ namespace CozyBot
         output += $"{deleted}{Environment.NewLine}";
       output += $"```{Environment.NewLine}{EmojiCodes.Pepe}";
 
-      await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
+      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
     }
 
     /// <summary>

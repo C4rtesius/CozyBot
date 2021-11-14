@@ -129,15 +129,7 @@ namespace CozyBot
     {
       return async (msg) =>
       {
-        try
-        {
-          await msg.DeleteAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {key}", ex);
-          throw;
-        }
+        await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][USE][key={key}]").ConfigureAwait(false);
 
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
         if (_ratelimitDict.ContainsKey(dictKey))
@@ -210,25 +202,17 @@ namespace CozyBot
       }
       await Task.Delay(totalDelay).ConfigureAwait(false);
 
-      await BotHelper.SendMessageAsyncSafe(msg.Channel, line).ConfigureAwait(false);
+      await msg.Channel.SendMessageAsyncSafe(line).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Command performing citation addition logic.
     /// </summary>
     /// <param name="msg">Message which invoked this command, containing citation to save.</param>
-    /// <returns>Async Task perofrming citation addition logic.</returns>
+    /// <returns>Async Task performing citation addition logic.</returns>
     protected override async Task AddCommand(SocketMessage msg)
     {
-      try
-      {
-        await msg.DeleteAsync().ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
-        throw;
-      }
+      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][ADD]").ConfigureAwait(false);
 
       if (!Regex.IsMatch(msg.Content, AddCommandRegex))
         return;
@@ -296,7 +280,7 @@ namespace CozyBot
 
       Reconfigure(_configEl);
 
-      await BotHelper.SendMessageAsyncSafe(msg.Channel, $"Записав цитатку {EmojiCodes.DankPepe}").ConfigureAwait(false);
+      await msg.Channel.SendMessageAsyncSafe($"Записав цитатку {EmojiCodes.DankPepe}").ConfigureAwait(false);
     }
 
     protected override void GenerateUseCommands(List<ulong> perms)
@@ -314,15 +298,7 @@ namespace CozyBot
 
     protected override async Task ListCommand(SocketMessage msg)
     {
-      try
-      {
-        await msg.DeleteAsync().ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
-        throw;
-      }
+      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][LIST]").ConfigureAwait(false);
 
       if (!Regex.IsMatch(msg.Content, ListCommandRegex))
         return;
@@ -365,21 +341,12 @@ namespace CozyBot
       foreach (var outputMsg in outputMsgs)
         await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
 
-      await BotHelper.SendMessageAsyncSafe(msg.Channel,
-                                           $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+      await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }
 
     protected virtual async Task VerboseListCommand(SocketMessage msg)
     {
-      try
-      {
-        await msg.DeleteAsync().ConfigureAwait(false);
-      }
-      catch (Exception ex)
-      {
-        BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
-        throw;
-      }
+      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][VLIST]").ConfigureAwait(false);
 
       if (!Regex.IsMatch(msg.Content, ListCommandRegex))
         return;
@@ -433,71 +400,60 @@ namespace CozyBot
       foreach (var outputMsg in outputMsgs)
         await ch.SendMessageAsync(outputMsg).ConfigureAwait(false);
 
-      await BotHelper.SendMessageAsyncSafe(msg.Channel,
-                                           $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
-
+      await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }
 
     protected override async Task HelpCommand(SocketMessage msg)
     {
-      if (msg.Author is SocketGuildUser user)
+      if (!(msg.Author is SocketGuildUser user))
+        return;
+
+      await msg.DeleteAsyncSafe($"[{_stringID.ToUpper()}][HELP]").ConfigureAwait(false);
+
+      var guild = user.Guild;
+      string iconUrl = guild.IconUrl;
+
+      var eba = new EmbedAuthorBuilder
       {
-        try
-        {
-          await msg.DeleteAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          BotHelper.LogExceptionToConsole($"[{_stringID.ToUpper()}] Command call deletion failed: {msg.Content}", ex);
-          throw;
-        }
+        Name = guild.GetUser(_clientId).Username,
+        IconUrl = guild.GetUser(_clientId).GetAvatarUrl()
+      };
 
-        var guild = user.Guild;
-        string iconUrl = guild.IconUrl;
+      var efb = new EmbedFieldBuilder
+      {
+        IsInline = false,
+        Name = "Команди цитатного модуля",
+        Value = String.Join(Environment.NewLine,
+          @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
+          @$"{_prefix}add автор цитата - записати у файл автора цитату",
+          @$"{_prefix}del автор - видалити цитати автора",
+          @$"{_prefix}list - отримати список доступних авторів у Приватних Повідомленнях",
+          @$"{_prefix}автор - отримати цитату автора",
+          @$"{_prefix}help - цей список команд")
+      };
 
-        var eba = new EmbedAuthorBuilder
-        {
-          Name = guild.GetUser(_clientId).Username,
-          IconUrl = guild.GetUser(_clientId).GetAvatarUrl()
-        };
+      var efob = new EmbedFooterBuilder
+      {
+        Text = "Пора оффать чат."
+      };
 
-        var efb = new EmbedFieldBuilder
-        {
-          IsInline = false,
-          Name = "Команди цитатного модуля",
-          Value = String.Join(Environment.NewLine,
-                              @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
-                              @$"{_prefix}add автор цитата - записати у файл автора цитату",
-                              @$"{_prefix}del автор - видалити цитати автора",
-                              @$"{_prefix}list - отримати список доступних авторів у Приватних Повідомленнях",
-                              @$"{_prefix}автор - отримати цитату автора",
-                              @$"{_prefix}help - цей список команд")
-        };
+      var eb = new EmbedBuilder
+      {
+        Author = eba,
+        Color = Color.Green,
+        ThumbnailUrl = iconUrl,
+        Title = "Довідка :",
+        Timestamp = DateTime.Now,
+        Footer = efob
+      };
 
-        var efob = new EmbedFooterBuilder
-        {
-          Text = "Пора оффать чат."
-        };
+      eb.Fields.Add(efb);
 
-        var eb = new EmbedBuilder
-        {
-          Author = eba,
-          Color = Color.Green,
-          ThumbnailUrl = iconUrl,
-          Title = "Довідка :",
-          Timestamp = DateTime.Now,
-          Footer = efob
-        };
+      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
 
-        eb.Fields.Add(efb);
+      await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
 
-        var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-
-        await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
-
-        await BotHelper.SendMessageAsyncSafe(msg.Channel,
-                                             $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
-      }
+      await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }
 
     protected override async Task DeleteCommand(SocketMessage msg)
@@ -545,10 +501,10 @@ namespace CozyBot
 
         output += "```" + Environment.NewLine + EmojiCodes.Pepe;
 
-        await BotHelper.SendMessageAsyncSafe(msg.Channel, output).ConfigureAwait(false);
+        await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
       }
       else
-        await BotHelper.SendMessageAsyncSafe(msg.Channel, @$"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+        await msg.Channel.SendMessageAsyncSafe(@$"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
     }
 
     /// <summary>

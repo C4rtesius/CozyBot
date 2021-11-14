@@ -9,7 +9,7 @@ namespace CozyBot
   {
     private static object _consoleLock = new object();
 
-    public static async Task SendMessageAsyncSafe(ISocketMessageChannel channel, string content)
+    public static async Task SendMessageAsyncSafe(this ISocketMessageChannel channel, string content)
     {
       try
       {
@@ -19,6 +19,19 @@ namespace CozyBot
       catch (Exception ex)
       {
         LogExceptionToConsole($"[WARNING] Message send failed in channel: {channel.Name}.", ex);
+      }
+    }
+
+    public static async Task DeleteAsyncSafe(this SocketMessage msg, string prefixData = default(string))
+    {
+      try
+      {
+        if (msg != null)
+          await msg.DeleteAsync().ConfigureAwait(false);
+      }
+      catch (Exception ex)
+      {
+        LogExceptionToConsole($"[WARNING]{prefixData ?? String.Empty} Message deletion failed in {msg.Channel.Name}.", ex);
       }
     }
 
