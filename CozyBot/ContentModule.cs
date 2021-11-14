@@ -597,7 +597,7 @@ namespace CozyBot
           return;
         }
 
-        string output = $"За запитом `{regexStr}` знайдено наступне:{Environment.NewLine}```";
+        string output = $"За запитом `{regexStr}` знайдено наступне:{Environment.NewLine}```{Environment.NewLine}";
         List<string> outputMsgs = new List<string>();
         foreach (var key in matchedKeysList)
         {
@@ -607,7 +607,7 @@ namespace CozyBot
           {
             output = String.Concat(output, "```");
             outputMsgs.Add(output);
-            output = $"```{Environment.NewLine}";
+            output = $"```{Environment.NewLine}{key}";
           }
         }
         output = String.Concat(output, "```");

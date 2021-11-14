@@ -297,7 +297,7 @@ namespace CozyBot
 
       string output = String.Concat("**Список доступних цитат",
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
-                                    $":**{Environment.NewLine}```");
+                                    $":**{Environment.NewLine}```{Environment.NewLine}");
 
       var list = RPKeyListGenerator(listRoot,
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.",
@@ -314,7 +314,7 @@ namespace CozyBot
         {
           output += "```";
           outputMsgs.Add(output);
-          output = $"```{key}";
+          output = $"```{Environment.NewLine}{key}";
         }
       }
 
@@ -477,7 +477,7 @@ namespace CozyBot
       {
         await ModuleConfigChanged().ConfigureAwait(false);
         Reconfigure(_configEl);
-        string output = @$"Видалив наступні цитати :{Environment.NewLine}```";
+        string output = @$"Видалив наступні цитати :{Environment.NewLine}```{Environment.NewLine}";
         foreach (var deleted in citationsDeleted)
           output += $"{deleted}{Environment.NewLine}";
 

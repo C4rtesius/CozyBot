@@ -257,11 +257,7 @@ namespace CozyBot
 
     protected override async Task ListCommand(SocketMessage msg)
     {
-      // TODO : fix a bug with wrong `list` command output
-
       await msg.DeleteAsyncSafe($"[{LogName}][LIST]").ConfigureAwait(false);
-
-      // TODO : fix `c!list key` when key contains only 1 item
 
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
 
@@ -277,7 +273,8 @@ namespace CozyBot
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" по підключу `{keyStr}`",
                                     ":**",
                                     Environment.NewLine,
-                                    "```");
+                                    "```",
+                                    Environment.NewLine);
 
       var list = RPKeyListGenerator(listRoot,
                                     String.IsNullOrWhiteSpace(keyStr) ? "" : keyStr + ".",
@@ -294,7 +291,7 @@ namespace CozyBot
         {
           output += "```";
           outputMsgs.Add(output);
-          output = $"```{key}";
+          output = $"```{Environment.NewLine}{key}";
         }
       }
 
