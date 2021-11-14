@@ -398,7 +398,7 @@ namespace CozyBot
       allSearchPerms.AddRange(perms);
       Rule searchRule = RuleGenerator.HasRoleByIds(allSearchPerms) & RuleGenerator.PrefixatedCommand(_prefix, "search");
 
-      useCommands.Add(new BotCommand($"{StringID}-listcmd", listRule, SearchCommand));
+      useCommands.Add(new BotCommand($"{StringID}-searchcmd", searchRule, SearchCommand));
 
       _useCommands = useCommands;
     }
