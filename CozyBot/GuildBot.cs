@@ -232,6 +232,8 @@ namespace CozyBot
             continue;
           }
 
+          BotHelper.LogDebugToConsole($"{logPrefix} Downloaded {msgList.Count} messages from #{textChannel.Name}.");
+
           while (lastSeenMsg.Timestamp > timeBoundary)
           {
             int listCount;
@@ -260,7 +262,7 @@ namespace CozyBot
             BotHelper.LogDebugToConsole($"{logPrefix} Downloaded {msgList.Count} messages from #{textChannel.Name}.");
 
             if (msgList.Count == listCount)
-              break;
+              break;  // boundary is earlier than channel creation
           }
 
           int threads = Environment.ProcessorCount < 3 ? 1 : Environment.ProcessorCount - 1;
@@ -292,7 +294,8 @@ namespace CozyBot
                         lock (emoteReacDictLock)
                           emoteReacDict[reaction.Key] += reaction.Value.ReactionCount;
                       }
-
+                  if (String.IsNullOrEmpty(message.Content))
+                    continue; // skip empty messages
                   foreach (var emote in emoteTextDict.Keys.ToList())
                   {
                     int n = (message.Content.Length - message.Content.Replace(emote, String.Empty, StringComparison.InvariantCulture).Length) / emote.Length;
