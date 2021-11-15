@@ -391,21 +391,21 @@ namespace CozyBot
         mres.Set();
         await Task.WhenAll(waitTask).ConfigureAwait(false);
 
-        if (matchesDict.Count != 0)
+        if (matchesDict.Count == 0)
         {
-          await msg.Channel.SendMessageAsyncSafe($"Знайдено {matchesDict.Count} **цитат** за запитом `{regexStr}` {EmojiCodes.DankPepe}").ConfigureAwait(false);
-
-          string output = $"Результати пошуку **цитат** за запитом: `{regexStr}`:";
-
-          var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-          await dm.GenerateAndSendOutputMessages(output,
-                                                 matchesDict,
-                                                 kvp => $"`{kvp.Key}`{Environment.NewLine}{kvp.Value}{Environment.NewLine}",
-                                                 s => s,
-                                                 s => s).ConfigureAwait(false);
-        }
-        else
           await msg.Channel.SendMessageAsyncSafe($"Не знайдено **цитат** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
+          return;
+        }
+        await msg.Channel.SendMessageAsyncSafe($"Знайдено {matchesDict.Count} **цитат** за запитом `{regexStr}` {EmojiCodes.DankPepe}").ConfigureAwait(false);
+
+        string output = $"Результати пошуку **цитат** за запитом: `{regexStr}`:{Environment.NewLine}";
+
+        var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+        await dm.GenerateAndSendOutputMessages(output,
+                                               matchesDict,
+                                               kvp => $"`{kvp.Key}`{Environment.NewLine}{kvp.Value}{Environment.NewLine}",
+                                               s => s,
+                                               s => s).ConfigureAwait(false);
       }
       catch (Exception ex)
       {
