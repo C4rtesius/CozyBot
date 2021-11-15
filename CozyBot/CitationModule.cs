@@ -412,8 +412,11 @@ namespace CozyBot
         ex.LogToConsole($"[WARNING]{cmdPrefix} Search failed for regex \"{regexStr}\".");
         throw;
       }
-      BotHelper.LogDebugToConsole($"{cmdPrefix} Passing control to keys search.");
-      await base.SearchCommand(msg).ConfigureAwait(false);
+      finally
+      {
+        BotHelper.LogDebugToConsole($"{cmdPrefix} Passing control to keys search.");
+        await base.SearchCommand(msg).ConfigureAwait(false);
+      }
     }
 
     protected virtual async Task VerboseListCommand(SocketMessage msg)
