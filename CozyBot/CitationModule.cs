@@ -1,12 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Xml.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Globalization;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 using Discord;
@@ -96,9 +95,9 @@ namespace CozyBot
     /// Module XML config path.
     /// </summary>
     public override string ModuleConfigFilePath
-      => String.IsNullOrEmpty(_moduleConfigFilePath)
-         ? _moduleConfigFilePath = Path.Combine(_guildPath, _configFileName)
-         : _moduleConfigFilePath;
+      => String.IsNullOrEmpty(_moduleConfigFilePath) ?
+         _moduleConfigFilePath = Path.Combine(_guildPath, _configFileName) :
+         _moduleConfigFilePath;
 
     /// <summary>
     /// Citation module constructor.
@@ -125,7 +124,7 @@ namespace CozyBot
     {
       return async (msg) =>
       {
-        string logPrefix = $"[{LogName}][USE][key={key}]";
+        string logPrefix = $"[{LogPref}][USE][key={key}]";
         await msg.DeleteAsyncSafe(logPrefix).ConfigureAwait(false);
 
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
@@ -207,7 +206,7 @@ namespace CozyBot
     /// <returns>Async Task performing citation addition logic.</returns>
     protected override async Task AddCommand(SocketMessage msg)
     {
-      string logPrefix = $"[{LogName}][ADD]";
+      string logPrefix = $"[{LogPref}][ADD]";
       await msg.DeleteAsyncSafe(logPrefix).ConfigureAwait(false);
 
       var regexMatch = Regex.Match(msg.Content, AddCommandRegex);
@@ -283,7 +282,8 @@ namespace CozyBot
 
     protected override async Task ListCommand(SocketMessage msg)
     {
-      await msg.DeleteAsyncSafe($"[{LogName}][LIST]").ConfigureAwait(false);
+      string cmdPrefix = $"[{LogPref}][LIST]";
+      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
 
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
 
@@ -291,47 +291,32 @@ namespace CozyBot
         return;
 
       string keyStr = regexMatch.Groups["key"].Value;
-      var listRoot = GetRootByKey(keyStr);
 
-      List<string> outputMsgs = new List<string>();
-
-      string output = String.Concat("**Список доступних цитат",
-                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
-                                    $":**{Environment.NewLine}```");
-
-      var list = RPKeyListGenerator(listRoot,
+      var list = RPKeyListGenerator(GetRootByKey(keyStr),
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.",
                                     false);
       if (list.Count == 0)
         return;
-
       list.Add(keyStr);
-      foreach (var key in list)
-      {
-        if (output.Length + key.Length < _msgLengthLimit)
-          output += $"{Environment.NewLine}{key}";
-        else
-        {
-          output += "```";
-          outputMsgs.Add(output);
-          output = $"```{Environment.NewLine}{key}";
-        }
-      }
 
-      output += @"```";
-      outputMsgs.Add(output);
+      string output = String.Concat("**Список доступних цитат",
+                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
+                                    $":**{Environment.NewLine}```{Environment.NewLine}");
 
       var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      await dm.GenerateAndSendOutputMessages(output,
+                                             list,
+                                             s => $"{s}{Environment.NewLine}",
+                                             s => $"```{Environment.NewLine}{s}",
+                                             s => $"{s}```").ConfigureAwait(false);
 
-      foreach (var outputMsg in outputMsgs)
-        await dm.SendMessageAsyncSafe(outputMsg).ConfigureAwait(false);
-
-      await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+      output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
+      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
     }
 
     protected override async Task SearchCommand(SocketMessage msg)
     {
-      string cmdPrefix = $"[{LogName}][SEARCH-FILES]";
+      string cmdPrefix = $"[{LogPref}][SEARCH-FILES]";
       BotHelper.LogDebugToConsole($"{cmdPrefix} Entering.");
       var regexStr = msg.Content.Replace($"{_prefix}search", String.Empty, StringComparison.InvariantCulture).TrimStart();
       try
@@ -410,25 +395,14 @@ namespace CozyBot
         {
           await msg.Channel.SendMessageAsyncSafe($"Знайдено {matchesDict.Count} **цитат** за запитом `{regexStr}` {EmojiCodes.DankPepe}").ConfigureAwait(false);
 
-          string output = $"**Результати пошуку **цитат** за запитом: `{regexStr}`:**";
-          List<string> outputMsgs = new List<string>();
-          foreach (var kvp in matchesDict)
-          {
-            string keyStr = $"`{kvp.Key}`";
-            if (output.Length + keyStr.Length + kvp.Value.Length < _msgLengthLimit)
-              output = $"{output}{Environment.NewLine}{keyStr}{Environment.NewLine}{kvp.Value}";
-            else
-            {
-              outputMsgs.Add(output);
-              output = $"{keyStr}{Environment.NewLine}{kvp.Value}";
-            }
-          }
-
-          outputMsgs.Add(output);
+          string output = $"Результати пошуку **цитат** за запитом: `{regexStr}`:";
 
           var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-          foreach (var message in outputMsgs)
-            await dm.SendMessageAsyncSafe(message).ConfigureAwait(false);
+          await dm.GenerateAndSendOutputMessages(output,
+                                                 matchesDict,
+                                                 kvp => $"`{kvp.Key}`{Environment.NewLine}{kvp.Value}{Environment.NewLine}",
+                                                 s => s,
+                                                 s => s).ConfigureAwait(false);
         }
         else
           await msg.Channel.SendMessageAsyncSafe($"Не знайдено **цитат** за запитом `{regexStr}` {EmojiCodes.Pepe}").ConfigureAwait(false);
@@ -444,7 +418,8 @@ namespace CozyBot
 
     protected virtual async Task VerboseListCommand(SocketMessage msg)
     {
-      await msg.DeleteAsyncSafe($"[{LogName}][VLIST]").ConfigureAwait(false);
+      string cmdPrefix = $"[{LogPref}][VLIST]";
+      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
 
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
 
@@ -462,42 +437,33 @@ namespace CozyBot
 
       string output = String.Concat("**Розширений список цитат",
                                     String.IsNullOrWhiteSpace(cmdKey) ? String.Empty : @$" за ключем `{cmdKey}`",
-                                    $":**");
+                                    $":**{Environment.NewLine}");
 
-      foreach (var kvp in itemsDict)
+      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+
+      await dm.GenerateAndSendOutputMessages(output,
+                                             itemsDict,
+                                             getCitation,
+                                             s => s,
+                                             s => s).ConfigureAwait(false);
+
+      await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+
+      async Task<string> getCitation(KeyValuePair<string, XElement> kvp)
       {
-        string citation;
-        string citationFileName = kvp.Value.Value;
-
         try
         {
-          citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, citationFileName)).ConfigureAwait(false);
+          string result = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, kvp.Value.Value)).ConfigureAwait(false);
+          if (result.Length > _msgLengthLimit)
+            return String.Empty;
+          return $"`{kvp.Key}`{Environment.NewLine}{result}{Environment.NewLine}";
         }
         catch (Exception ex)
         {
-          ex.LogToConsole($"[{LogName}] Citation loading failed: {kvp.Value.Value}");
-          throw;
-        }
-        if (citation.Length > _msgLengthLimit)
-          continue; // if file contents are longer than limit then skip file
-
-        var keyStr = $@"`{kvp.Key}`";
-        if (output.Length + keyStr.Length + citation.Length < _msgLengthLimit)
-          output = $"{output}{Environment.NewLine}{keyStr}{Environment.NewLine}{citation}";
-        else
-        {
-          outputMsgs.Add(output);
-          output = $"{keyStr}{Environment.NewLine}{citation}";
+          ex.LogToConsole($"{cmdPrefix} Citation loading failed: {kvp.Value.Value}");
+          return String.Empty;
         }
       }
-
-      outputMsgs.Add(output);
-
-      var ch = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-      foreach (var outputMsg in outputMsgs)
-        await ch.SendMessageAsyncSafe(outputMsg).ConfigureAwait(false);
-
-      await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
     }
 
     protected override async Task HelpCommand(SocketMessage msg)
@@ -505,14 +471,22 @@ namespace CozyBot
       if (!(msg.Author is SocketGuildUser user))
         return;
 
-      await msg.DeleteAsyncSafe($"[{LogName}][HELP]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogPref}][HELP]").ConfigureAwait(false);
 
+      //var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      await msg.Channel.SendMessageAsync(String.Empty, false, BuildHelpEmbed(user)).ConfigureAwait(false);
+
+      //await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+    }
+
+    private Embed BuildHelpEmbed(SocketGuildUser user)
+    {
       var guild = user.Guild;
       string iconUrl = guild.IconUrl;
 
       var eba = new EmbedAuthorBuilder
       {
-        Name = guild.GetUser(_clientId).Username,
+        Name = guild.GetUser(_clientId).Nickname,
         IconUrl = guild.GetUser(_clientId).GetAvatarUrl()
       };
 
@@ -521,12 +495,15 @@ namespace CozyBot
         IsInline = false,
         Name = "Команди цитатного модуля",
         Value = String.Join(Environment.NewLine,
-                            @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
-                            @$"{_prefix}add автор цитата - записати у файл автора цитату",
-                            @$"{_prefix}del автор - видалити цитати автора",
-                            @$"{_prefix}list - отримати список доступних авторів у Приватних Повідомленнях",
-                            @$"{_prefix}автор - отримати цитату автора",
-                            @$"{_prefix}help - цей список команд")
+                            @$"`{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ...` - налаштування доступу до команд",
+                            @$"`{_prefix}add ключ цитата` - зберегти цитату з ключем",
+                            $@"`{_prefix}search запит` - знайти цитату по ключу або змісту цитат за запитом",
+                            @$"`{_prefix}vlist [ключ]` - отримати список цитат за ключем",
+                            @$"`{_prefix}list [ключ]` - отримати список підключів за ключем",
+                            @$"`{_prefix}del ключ` - видалити ключ та пов'язані з ним цитати",
+                            @$"`{_prefix}ключ` - отримати цитату за ключем",
+                            @$"`{_prefix}help` - цей список команд",
+                            @$"`{_prefix}` - отримати випадкову цитату")
       };
 
       var efob = new EmbedFooterBuilder
@@ -545,12 +522,7 @@ namespace CozyBot
       };
 
       eb.Fields.Add(efb);
-
-      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-
-      await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
-
-      await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+      return eb.Build();
     }
 
     protected override async Task DeleteCommand(SocketMessage msg)
@@ -564,11 +536,8 @@ namespace CozyBot
       if (String.IsNullOrWhiteSpace(key))
         return;
 
-      var listRoot = GetRootByKey(key);
       var delDict = new Dictionary<string, XElement>();
-
-      RPItemDictGenerator(listRoot, $"{key}.", delDict);
-
+      RPItemDictGenerator(GetRootByKey(key), $"{key}.", delDict);
       List<string> citationsDeleted = new List<string>();
 
       foreach (var delKVP in delDict)
@@ -581,27 +550,28 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          ex.LogToConsole($"[{LogName}][DEL] Citation deletion failed: {key} -> {delKVP.Value.Value}");
+          ex.LogToConsole($"[{LogPref}][DEL] Citation deletion failed: {key} -> {delKVP.Value.Value}");
           throw;
         }
       }
 
-      if (citationsDeleted.Count > 0)
+      if (citationsDeleted.Count == 0)
       {
-        await ModuleConfigChanged().ConfigureAwait(false);
-        Reconfigure(_configEl);
-        string output = @$"Видалив наступні цитати :{Environment.NewLine}```{Environment.NewLine}";
-        foreach (var deleted in citationsDeleted)
-          output += $"{deleted}{Environment.NewLine}";
-
-        // TODO: what if deleted list is longer than limit?
-
-        output += $"```{Environment.NewLine}{EmojiCodes.Pepe}";
-
-        await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
-      }
-      else
         await msg.Channel.SendMessageAsyncSafe(@$"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+        return;
+      }
+
+      await ModuleConfigChanged().ConfigureAwait(false);
+      Reconfigure(_configEl);
+      string output = @$"Видалив наступні цитати:{Environment.NewLine}```{Environment.NewLine}";
+
+      await msg.Channel.GenerateAndSendOutputMessages(output,
+                                                      citationsDeleted,
+                                                      s => $"{s}{Environment.NewLine}",
+                                                      s => $"```{Environment.NewLine}{s}",
+                                                      s => $"{s}```").ConfigureAwait(false);
+
+      await msg.Channel.SendMessageAsyncSafe(EmojiCodes.Pepe).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -620,7 +590,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        ex.LogToConsole($"[{LogName}] Default config creation failed: {filePath}");
+        ex.LogToConsole($"[{LogPref}] Default config creation failed: {filePath}");
         throw;
       }
     }

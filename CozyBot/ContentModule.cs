@@ -138,7 +138,7 @@ namespace CozyBot
     /// <summary>
     /// Module identifier for logging purposes.
     /// </summary>
-    public virtual string LogName => StringID.ToUpper(CultureInfo.InvariantCulture);
+    public virtual string LogPref => StringID.ToUpper(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Module XML config path.
@@ -273,13 +273,13 @@ namespace CozyBot
       XElement moduleCfgEl = _moduleConfig.Root;
 
       if (moduleCfgEl.Attribute("cfgPerm") == null)
-        moduleCfgEl.Add(new XAttribute("cfgPerm", ""));
+        moduleCfgEl.Add(new XAttribute("cfgPerm", String.Empty));
       if (moduleCfgEl.Attribute("addPerm") == null)
-        moduleCfgEl.Add(new XAttribute("addPerm", ""));
+        moduleCfgEl.Add(new XAttribute("addPerm", String.Empty));
       if (moduleCfgEl.Attribute("usePerm") == null)
-        moduleCfgEl.Add(new XAttribute("usePerm", ""));
+        moduleCfgEl.Add(new XAttribute("usePerm", String.Empty));
       if (moduleCfgEl.Attribute("delPerm") == null)
-        moduleCfgEl.Add(new XAttribute("delPerm", ""));
+        moduleCfgEl.Add(new XAttribute("delPerm", String.Empty));
 
       List<ulong> addPermissionList = ExtractPermissions(moduleCfgEl.Attribute("addPerm"));
       List<ulong> usePermissionList = ExtractPermissions(moduleCfgEl.Attribute("usePerm"));
@@ -573,7 +573,7 @@ namespace CozyBot
 
     protected virtual async Task SearchCommand(SocketMessage msg)
     {
-      string cmdPrefix = $"[{LogName}][SEARCH]";
+      string cmdPrefix = $"[{LogPref}][SEARCH]";
       BotHelper.LogDebugToConsole($"{cmdPrefix} Entered search.");
       var regexStr = msg.Content.Replace($"{_prefix}search", String.Empty, StringComparison.InvariantCulture).TrimStart();
       try
@@ -589,12 +589,12 @@ namespace CozyBot
         Regex regex;
         try
         {
-          regex = new Regex(regexStr, RegexOptions.CultureInvariant);
+          regex = new Regex(regexStr, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
         }
         catch (ArgumentException ex)
         {
           ex.LogToConsole($"[WARNING]{cmdPrefix} Malformed regex \"{regexStr}\".");
-          await msg.Channel.SendMessageAsyncSafe($"Що це за хуйня?? {regexStr} {EmojiCodes.Tomas}").ConfigureAwait(false);
+          await msg.Channel.SendMessageAsyncSafe($"Що це за хуйня?? {EmojiCodes.Tomas} `{regexStr}`").ConfigureAwait(false);
           return;
         }
 
@@ -609,26 +609,14 @@ namespace CozyBot
         }
         await msg.Channel.SendMessageAsyncSafe($"Знайдено {matchedKeysList.Count} **ключів** за запитом `{regexStr}` {EmojiCodes.DankPepe}").ConfigureAwait(false);
 
-        string output = $"Результати пошуку **ключів** за запитом `{regexStr}`:{Environment.NewLine}```";
-        List<string> outputMsgs = new List<string>();
-        foreach (var key in matchedKeysList)
-        {
-          if (output.Length + key.Length < _msgLengthLimit)
-            output = String.Concat(output, $"{Environment.NewLine}{key}");
-          else
-          {
-            output = String.Concat(output, "```");
-            outputMsgs.Add(output);
-            output = $"```{Environment.NewLine}{key}";
-          }
-        }
-        output = String.Concat(output, "```");
-        outputMsgs.Add(output);
+        string output = $"Результати пошуку **ключів** за запитом `{regexStr}`:{Environment.NewLine}```{Environment.NewLine}";
 
         var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-        foreach (var message in outputMsgs)
-          await dm.SendMessageAsyncSafe(message).ConfigureAwait(false);
-        //await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
+        await dm.GenerateAndSendOutputMessages(output,
+                                               matchedKeysList,
+                                               s => $"{s}{Environment.NewLine}",
+                                               s => $"```{Environment.NewLine}{s}",
+                                               s => $"{s}```").ConfigureAwait(false);
       }
       catch (Exception ex)
       {

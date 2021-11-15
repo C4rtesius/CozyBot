@@ -63,7 +63,7 @@ namespace CozyBot
     {
       "add",
       "list",
-      //"vlist", not implemented yet
+      "vlist", // not implemented yet
       "help",
       "cfg",
       "del",
@@ -91,14 +91,9 @@ namespace CozyBot
     /// Module XML config path.
     /// </summary>
     public override string ModuleConfigFilePath
-    {
-      get
-      {
-        if (String.IsNullOrEmpty(_moduleConfigFilePath))
-          _moduleConfigFilePath = Path.Combine(_guildPath, _configFileName);
-        return _moduleConfigFilePath;
-      }
-    }
+      => String.IsNullOrEmpty(_moduleConfigFilePath) ?
+         _moduleConfigFilePath = Path.Combine(_guildPath, _configFileName) :
+         _moduleConfigFilePath;
 
     /// <summary>
     /// ImageModule constructor.
@@ -120,7 +115,7 @@ namespace CozyBot
     {
       return async (msg) =>
       {
-        await msg.DeleteAsyncSafe($"[{LogName}][USE]").ConfigureAwait(false);
+        await msg.DeleteAsyncSafe($"[{LogPref}][USE]").ConfigureAwait(false);
 
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
         if (_ratelimitDict.ContainsKey(dictKey))
@@ -140,22 +135,14 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          ex.LogToConsole($"[{LogName}] File send failed: {key}");
+          ex.LogToConsole($"[{LogPref}] File send failed: {key}");
           throw;
         }
 
         var usageAttr = imgEl.Attribute(_usageCountAttributeName);
 
         if (usageAttr != null)
-        {
-          if (Int32.TryParse(usageAttr.Value, out int uses))
-          {
-            uses++;
-            usageAttr.Value = $"{uses}";
-          }
-          else
-            usageAttr.Value = "1";
-        }
+          usageAttr.Value = Int32.TryParse(usageAttr.Value, out int uses) ? $"{++uses}" : "1";
         else
           imgEl.Add(new XAttribute(_usageCountAttributeName, "1"));
 
@@ -184,12 +171,12 @@ namespace CozyBot
       using (HttpClient hc = new HttpClient())
         using (FileStream fs = new FileStream(filepath, FileMode.Create, FileAccess.Write))
           await (await hc.GetAsync(new Uri(att.Url)).ConfigureAwait(false)).Content.CopyToAsync(fs).ConfigureAwait(false);
-
-      await sc.SendMessageAsyncSafe("Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
     }
 
     protected override async Task AddCommand(SocketMessage msg)
     {
+      string cmdPrefix = $"[{LogPref}][ADD]";
+      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
       if (!Regex.IsMatch(msg.Content, AddCommandRegex))
         return;
 
@@ -221,7 +208,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        ex.LogToConsole($"[{LogName}] File download failed: {regexMatch.Groups["key"].Value}");
+        ex.LogToConsole($"{cmdPrefix} File download failed: {regexMatch.Groups["key"].Value}");
         throw;
       }
 
@@ -239,7 +226,6 @@ namespace CozyBot
         }
         currentEl = newEl;
       }
-
       currentEl.Add(newItem);
 
       try
@@ -248,18 +234,18 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        ex.LogToConsole($"[{LogName}] Config save failed: {msg.Content}");
+        ex.LogToConsole($"{cmdPrefix} Config save failed.");
         throw;
       }
 
       Reconfigure(_configEl);
-
-      await msg.DeleteAsyncSafe($"[{LogName}][ADD]").ConfigureAwait(false);
+      await msg.Channel.SendMessageAsyncSafe("Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
     }
 
     protected override async Task ListCommand(SocketMessage msg)
     {
-      await msg.DeleteAsyncSafe($"[{LogName}][LIST]").ConfigureAwait(false);
+      string cmdPrefix = $"[{LogPref}][LIST]";
+      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
 
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
 
@@ -267,45 +253,26 @@ namespace CozyBot
         return;
 
       string keyStr = regexMatch.Groups["key"].Value;
-      var listRoot = GetRootByKey(keyStr);
 
-      List<string> outputMsgs = new List<string>();
-
-      string output = String.Concat("**Список доступних пікч",
-                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" по підключу `{keyStr}`",
-                                    ":**",
-                                    Environment.NewLine,
-                                    "```");
-
-      var list = RPKeyListGenerator(listRoot,
-                                    String.IsNullOrWhiteSpace(keyStr) ? "" : keyStr + ".",
+      var list = RPKeyListGenerator(GetRootByKey(keyStr),
+                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.",
                                     false);
       if (list.Count == 0)
         return;
-
       list.Add(keyStr);
-      foreach (var key in list)
-      {
-        if (output.Length + key.Length < _msgLengthLimit)
-          output += $"{Environment.NewLine}{key}";
-        else
-        {
-          output += "```";
-          outputMsgs.Add(output);
-          output = $"```{Environment.NewLine}{key}";
-        }
-      }
 
-      output += "```";
-      outputMsgs.Add(output);
+      string output = String.Concat("**Список доступних пікч",
+                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
+                                    $":**{Environment.NewLine}```{Environment.NewLine}");
 
       var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-
-      foreach (var outputMsg in outputMsgs)
-        await dm.SendMessageAsyncSafe(outputMsg).ConfigureAwait(false);
+      await dm.GenerateAndSendOutputMessages(output,
+                                             list,
+                                             s => $"{s}{Environment.NewLine}",
+                                             s => $"```{Environment.NewLine}{s}",
+                                             s => $"{s}```").ConfigureAwait(false);
 
       output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
-
       await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
     }
 
@@ -314,15 +281,24 @@ namespace CozyBot
       if (!(msg.Author is SocketGuildUser user))
         return;
 
-      await msg.DeleteAsyncSafe($"[{LogName}][HELP]").ConfigureAwait(false);
+      await msg.DeleteAsyncSafe($"[{LogPref}][HELP]").ConfigureAwait(false);
 
+      //var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      await msg.Channel.SendMessageAsync(String.Empty, false, BuildHelpEmbed(user)).ConfigureAwait(false);
+
+      //string output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
+      //await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
+    }
+
+    private Embed BuildHelpEmbed(SocketGuildUser user)
+    {
       var guild = user.Guild;
       string iconUrl = guild.IconUrl;
 
       var eba = new EmbedAuthorBuilder
       {
-        Name = @"Shining Armor",
-        IconUrl = @"https://cdn.discordapp.com/avatars/335004246007218188/3094a7be163d3cd1d03278b53c8f08eb.png"
+        Name = guild.GetUser(_clientId).Nickname,
+        IconUrl = guild.GetUser(_clientId).GetAvatarUrl()
       };
 
       var efb = new EmbedFieldBuilder
@@ -330,14 +306,14 @@ namespace CozyBot
         IsInline = false,
         Name = "Команди пікчевого модуля",
         Value = String.Join(Environment.NewLine,
-                            @$"{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ... - виставлення прав доступу до команд",
-                            @$"{_prefix}add ключ [пікча] - додати пікчу з ключем",
-                            @$"{_prefix}del ключ - видалити ключ та пов'язану з ним пікчу",
-                            @$"{_prefix}list - отримати список доступних ключів у Приватних Повідомленнях",
-                            $@"{_prefix}search запит - знайти пікчу по ключу згідно запиту",
-                            @$"{_prefix}ключ - отримати пікчу за ключем",
-                            @$"{_prefix} - отримати випадкову пікчу",
-                            @$"{_prefix}help - цей список команд")
+                            @$"`{_prefix}cfg perm [use/add/del/cfg] @Роль1 @Роль2 ...` - налаштування доступу до команд",
+                            @$"`{_prefix}add ключ [пікча]` - зберегти пікчу з ключем",
+                            $@"`{_prefix}search запит` - знайти пікчу по ключу за запитом",
+                            @$"`{_prefix}list [ключ]` - отримати список підключів за ключем",
+                            @$"`{_prefix}del ключ` - видалити ключ та пов'язані з ним пікчі",
+                            @$"`{_prefix}ключ` - отримати пікчу за ключем",
+                            @$"`{_prefix}help` - цей список команд",
+                            @$"`{_prefix}` - отримати випадкову пікчу")
       };
 
       var efob = new EmbedFooterBuilder
@@ -356,12 +332,7 @@ namespace CozyBot
       };
 
       eb.Fields.Add(efb);
-
-      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-      await dm.SendMessageAsync(String.Empty, false, eb.Build()).ConfigureAwait(false);
-
-      string output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
-      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
+      return eb.Build();
     }
 
     protected override async Task DeleteCommand(SocketMessage msg)
@@ -391,7 +362,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          ex.LogToConsole($"[{LogName}] Image deletion failed: {key} -> {delKVP.Value.Value}");
+          ex.LogToConsole($"[{LogPref}][DEL] Image deletion failed: {key} -> {delKVP.Value.Value}");
           throw;
         }
       }
@@ -404,12 +375,15 @@ namespace CozyBot
 
       await ModuleConfigChanged().ConfigureAwait(false);
       Reconfigure(_configEl);
-      string output = $"Видалив наступні пікчі:{Environment.NewLine}```";
-      foreach (var deleted in imgDeleted)
-        output += $"{deleted}{Environment.NewLine}";
-      output += $"```{Environment.NewLine}{EmojiCodes.Pepe}";
+      string output = $"Видалив наступні пікчі:{Environment.NewLine}```{Environment.NewLine}";
 
-      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
+      await msg.Channel.GenerateAndSendOutputMessages(output,
+                                                      imgDeleted,
+                                                      s => $"{s}{Environment.NewLine}",
+                                                      s => $"```{Environment.NewLine}{s}",
+                                                      s => $"{s}```").ConfigureAwait(false);
+
+      await msg.Channel.SendMessageAsyncSafe(EmojiCodes.Pepe).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -422,14 +396,14 @@ namespace CozyBot
       {
         new XDocument(
           new XElement(ModuleXmlName,
-            new XAttribute("cfgPerm", ""),
-            new XAttribute("addPerm", ""),
-            new XAttribute("usePerm", ""),
-            new XAttribute("delPerm", ""))).Save(filePath);
+            new XAttribute("cfgPerm", String.Empty),
+            new XAttribute("addPerm", String.Empty),
+            new XAttribute("usePerm", String.Empty),
+            new XAttribute("delPerm", String.Empty))).Save(filePath);
       }
       catch (Exception ex)
       {
-        ex.LogToConsole($"[{LogName}] Default config creation failed.");
+        ex.LogToConsole($"[{LogPref}] Default config creation failed.");
         throw;
       }
     }
