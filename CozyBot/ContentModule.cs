@@ -573,8 +573,8 @@ namespace CozyBot
 
     protected virtual async Task SearchCommand(SocketMessage msg)
     {
-      string logPrefix = $"[{LogName}][SEARCH]";
-      BotHelper.LogDebugToConsole($"{logPrefix} Entered search.");
+      string cmdPrefix = $"[{LogName}][SEARCH]";
+      BotHelper.LogDebugToConsole($"{cmdPrefix} Entered search.");
       var regexStr = msg.Content.Replace($"{_prefix}search", String.Empty, StringComparison.InvariantCulture).TrimStart();
       try
       {
@@ -593,14 +593,14 @@ namespace CozyBot
         }
         catch (ArgumentException ex)
         {
-          BotHelper.LogExceptionToConsole($"[WARNING]{logPrefix} Malformed regex \"{regexStr}\".", ex);
+          ex.LogToConsole($"[WARNING]{cmdPrefix} Malformed regex \"{regexStr}\".");
           await msg.Channel.SendMessageAsyncSafe($"Що це за хуйня?? {regexStr} {EmojiCodes.Tomas}").ConfigureAwait(false);
           return;
         }
 
         var matchedKeysList = RPKeyListGenerator(GetRootByKey(String.Empty), String.Empty, true).Where(key => regex.IsMatch(key)).ToList();
 
-        BotHelper.LogDebugToConsole($"{logPrefix} Number of matches: {matchedKeysList.Count} for regex \"{regexStr}\".");
+        BotHelper.LogDebugToConsole($"{cmdPrefix} Number of matches: {matchedKeysList.Count} for regex \"{regexStr}\".");
 
         if (!matchedKeysList.Any())
         {
@@ -632,7 +632,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[WARNING]{logPrefix} Command failed. Query=\"{regexStr}\"", ex);
+        ex.LogToConsole($"[WARNING]{cmdPrefix} Command failed. Query=\"{regexStr}\"");
         throw;
       }
     }

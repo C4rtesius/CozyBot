@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading.Tasks;
 
 using Discord.WebSocket;
@@ -29,6 +30,18 @@ namespace CozyBot
       => _executeRule.Check(msg);
 
     public Task ExecuteCommand(SocketMessage msg)
-      => Task.Run(async () => await _cmd(msg).ConfigureAwait(false));
+    {
+      return Task.Run(async () =>
+      {
+        try
+        {
+          await _cmd(msg).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+          ex.LogToConsole($"[{_stringID.ToUpper(CultureInfo.InvariantCulture)}] Command failed.");
+        }
+      });
+    }
   }
 }

@@ -21,7 +21,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        LogExceptionToConsole($"[WARNING] Message send failed in channel: {channel.Name}.", ex);
+        ex.LogToConsole($"[WARNING] Message send failed in channel: {channel.Name}.");
         return null;
       }
     }
@@ -36,7 +36,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        LogExceptionToConsole($"[WARNING] Message send failed in channel: {channel.Recipient.Username}#{channel.Recipient.Discriminator}.", ex);
+        ex.LogToConsole($"[WARNING] Message send failed in channel: {channel.Recipient.Username}#{channel.Recipient.Discriminator}.");
         return null;
       }
     }
@@ -50,7 +50,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        LogExceptionToConsole($"[WARNING]{prefixData ?? String.Empty} Message deletion failed in {msg.Channel.Name}.", ex);
+        ex.LogToConsole($"[WARNING]{prefixData ?? String.Empty} Message deletion failed in {msg.Channel.Name}.");
       }
     }
 
@@ -60,7 +60,7 @@ namespace CozyBot
                      $"Exception caught: {ex.Message}",
                      $"Stack trace: {ex.StackTrace}");
 
-    public static void LogExceptionToConsole(string message, Exception ex)
+    public static void LogToConsole(this Exception ex, string message)
       => WriteToConsole(BuildExceptionMessage(message, ex));
 
     public static void LogDebugToConsole(string message)

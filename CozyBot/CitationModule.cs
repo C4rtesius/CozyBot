@@ -148,7 +148,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"{logPrefix} Citation retrieval failed.", ex);
+          ex.LogToConsole($"{logPrefix} Citation retrieval failed.");
           throw;
         }
 
@@ -161,7 +161,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"{logPrefix} Citation send failed.", ex);
+          ex.LogToConsole($"{logPrefix} Citation send failed.");
           throw;
         }
 
@@ -229,7 +229,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"{logPrefix} Citation save failed: {msg.Content}", ex);
+        ex.LogToConsole($"{logPrefix} Citation save failed: {msg.Content}");
         throw;
       }
 
@@ -259,7 +259,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"{logPrefix} Config save failed.", ex);
+        ex.LogToConsole($"{logPrefix} Config save failed.");
         throw;
       }
 
@@ -352,7 +352,7 @@ namespace CozyBot
         }
         catch (ArgumentException ex)
         {
-          BotHelper.LogExceptionToConsole($"[WARNING]{cmdPrefix} Malformed regex \"{regexStr}\".", ex);
+          ex.LogToConsole($"[WARNING]{cmdPrefix} Malformed regex \"{regexStr}\".");
           await msg.Channel.SendMessageAsyncSafe($"Що це за хуйня?? {EmojiCodes.Tomas} `{regexStr}`").ConfigureAwait(false);
           return;
         }
@@ -392,7 +392,7 @@ namespace CozyBot
           }
           catch (Exception ex)
           {
-            BotHelper.LogExceptionToConsole($"[WARNING]{cmdPrefix} Citation loading failed: {kvp.Key} - {kvp.Value.Value}", ex);
+            ex.LogToConsole($"[WARNING]{cmdPrefix} Citation loading failed: {kvp.Key} - {kvp.Value.Value}");
             continue;
           }
 
@@ -435,7 +435,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[WARNING]{cmdPrefix} Search failed for regex \"{regexStr}\".", ex);
+        ex.LogToConsole($"[WARNING]{cmdPrefix} Search failed for regex \"{regexStr}\".");
         throw;
       }
       BotHelper.LogDebugToConsole($"{cmdPrefix} Passing control to keys search.");
@@ -475,7 +475,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{LogName}] Citation loading failed: {kvp.Value.Value}", ex);
+          ex.LogToConsole($"[{LogName}] Citation loading failed: {kvp.Value.Value}");
           throw;
         }
         if (citation.Length > _msgLengthLimit)
@@ -581,7 +581,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{LogName}][DEL] Citation deletion failed: {key} -> {delKVP.Value.Value}", ex);
+          ex.LogToConsole($"[{LogName}][DEL] Citation deletion failed: {key} -> {delKVP.Value.Value}");
           throw;
         }
       }
@@ -620,7 +620,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}] Default config creation failed: {filePath}", ex);
+        ex.LogToConsole($"[{LogName}] Default config creation failed: {filePath}");
         throw;
       }
     }

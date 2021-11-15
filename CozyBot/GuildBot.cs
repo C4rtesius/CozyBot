@@ -228,7 +228,7 @@ namespace CozyBot
           }
           catch (Exception ex)
           {
-            BotHelper.LogExceptionToConsole($"{logPrefix} Fetch Messages failed : #{textChannel.Name}", ex);
+            ex.LogToConsole($"{logPrefix} Fetch Messages failed : #{textChannel.Name}");
             continue;
           }
 
@@ -255,7 +255,7 @@ namespace CozyBot
             }
             catch (Exception ex)
             {
-              BotHelper.LogExceptionToConsole($"{logPrefix} Fetch Messages failed : #{textChannel.Name}", ex);
+              ex.LogToConsole($"{logPrefix} Fetch Messages failed : #{textChannel.Name}");
               continue;
             }
 
@@ -309,7 +309,7 @@ namespace CozyBot
               }
               catch (Exception ex)
               {
-                BotHelper.LogExceptionToConsole($"{logPrefix} Processing Messages failed : #{textChannel.Name}", ex);
+                ex.LogToConsole($"{logPrefix} Processing Messages failed : #{textChannel.Name}");
               }
             }));
 
@@ -344,7 +344,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"{logPrefix}. Command failed:", ex);
+        ex.LogToConsole($"{logPrefix}. Command failed:");
         throw;
       }
     }

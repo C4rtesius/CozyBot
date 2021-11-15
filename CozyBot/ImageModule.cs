@@ -140,19 +140,21 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{LogName}] File send failed: {key}", ex);
+          ex.LogToConsole($"[{LogName}] File send failed: {key}");
           throw;
         }
 
-        if (imgEl.Attribute(_usageCountAttributeName) != null)
+        var usageAttr = imgEl.Attribute(_usageCountAttributeName);
+
+        if (usageAttr != null)
         {
-          if (Int32.TryParse(imgEl.Attribute(_usageCountAttributeName).Value, out int uses))
+          if (Int32.TryParse(usageAttr.Value, out int uses))
           {
             uses++;
-            imgEl.Attribute(_usageCountAttributeName).Value = $"{uses}";
+            usageAttr.Value = $"{uses}";
           }
           else
-            imgEl.Attribute(_usageCountAttributeName).Value = "1";
+            usageAttr.Value = "1";
         }
         else
           imgEl.Add(new XAttribute(_usageCountAttributeName, "1"));
@@ -219,7 +221,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}] File download failed: {regexMatch.Groups["key"].Value}", ex);
+        ex.LogToConsole($"[{LogName}] File download failed: {regexMatch.Groups["key"].Value}");
         throw;
       }
 
@@ -246,7 +248,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}] Config save failed: {msg.Content}", ex);
+        ex.LogToConsole($"[{LogName}] Config save failed: {msg.Content}");
         throw;
       }
 
@@ -389,7 +391,7 @@ namespace CozyBot
         }
         catch (Exception ex)
         {
-          BotHelper.LogExceptionToConsole($"[{LogName}] Image deletion failed: {key} -> {delKVP.Value.Value}", ex);
+          ex.LogToConsole($"[{LogName}] Image deletion failed: {key} -> {delKVP.Value.Value}");
           throw;
         }
       }
@@ -427,7 +429,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole($"[{LogName}] Default config creation failed.", ex);
+        ex.LogToConsole($"[{LogName}] Default config creation failed.");
         throw;
       }
     }

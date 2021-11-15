@@ -70,7 +70,7 @@ namespace CozyBot
       }
       catch (Exception ex)
       {
-        BotHelper.LogExceptionToConsole("[FATAL][CORE] Unrecoverable error occurred.", ex);
+        ex.LogToConsole("[FATAL][CORE] Unrecoverable error occurred.");
         throw;
       }
     }
