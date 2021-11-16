@@ -47,7 +47,7 @@ namespace CozyBot
     /// <summary>
     /// String for citation usage count in XML.
     /// </summary>
-    private static string _usageCountAttributeName = "used";
+    private static string _usageAttrName = "used";
 
     /// <summary>
     /// ConcurrentDictionary to implement ratelimiting per user, per channel, per command key.
@@ -123,7 +123,8 @@ namespace CozyBot
         string dictKey = $"{msg.Author.Id}{msg.Channel.Id}{key}";
         if (_ratelimitDict.ContainsKey(dictKey))
           return;
-        _ratelimitDict.TryAdd(dictKey, Task.Run(() => { Thread.Sleep(10000); _ratelimitDict.TryRemove(dictKey, out _); }));
+        _ratelimitDict.TryAdd(dictKey, Task.Run(async() =>
+          { await Task.Delay(10000).ConfigureAwait(false); _ratelimitDict.TryRemove(dictKey, out _); }));
 
         var imgList = GetItemsListByKey(key);
         if (imgList.Count == 0)
@@ -142,12 +143,8 @@ namespace CozyBot
           throw;
         }
 
-        var usageAttr = imgEl.Attribute(_usageCountAttributeName);
-
-        if (usageAttr != null)
-          usageAttr.Value = Int32.TryParse(usageAttr.Value, out int uses) ? $"{++uses}" : "1";
-        else
-          imgEl.Add(new XAttribute(_usageCountAttributeName, "1"));
+        var usageCount = imgEl.GetOrCreateDefaultAttributeValue(_usageAttrName, 0);
+        imgEl.Attribute(_usageAttrName).Value = $"{++usageCount}";
 
         await ModuleConfigChanged().ConfigureAwait(false);
         Reconfigure(_configEl);
@@ -171,9 +168,9 @@ namespace CozyBot
         return;
       }
 
-      using (HttpClient hc = new HttpClient())
-        using (FileStream fs = new FileStream(filepath, FileMode.Create, FileAccess.Write))
-          await (await hc.GetAsync(new Uri(att.Url)).ConfigureAwait(false)).Content.CopyToAsync(fs).ConfigureAwait(false);
+      using HttpClient hc = new HttpClient();
+      using FileStream fs = new FileStream(filepath, FileMode.Create, FileAccess.Write);
+      await (await hc.GetAsync(new Uri(att.Url)).ConfigureAwait(false)).Content.CopyToAsync(fs).ConfigureAwait(false);
     }
 
     protected override async Task AddCommand(SocketMessage msg)

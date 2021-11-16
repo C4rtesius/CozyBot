@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Xml.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
@@ -134,6 +135,58 @@ namespace CozyBot
     {
       await foreach (var message in GenerateOutputMessages(input, transform, source, openMsg, closeMsg))
         await channel.SendMessageAsyncSafe(message).ConfigureAwait(false);
+    }
+
+    public static bool GetOrCreateDefaultAttributeValue(this XElement el, string name, bool defValue)
+    {
+      if (el == null)
+        throw new ArgumentNullException(nameof(el));
+      if (name == null)
+        throw new ArgumentNullException(nameof(name));
+
+      var attr = el.Attribute(name);
+      if (attr != null)
+      {
+        if (Boolean.TryParse(attr.Value, out bool result))
+          return result;
+        WriteToConsole($"[WARNING] Failed to parse value {attr.Value} to {typeof(bool)} in {el.Name}.");
+        return defValue;
+      }
+      el.Add(new XAttribute(name, defValue));
+      return defValue;
+    }
+
+    public static int GetOrCreateDefaultAttributeValue(this XElement el, string name, int defValue)
+    {
+      if (el == null)
+        throw new ArgumentNullException(nameof(el));
+      if (name == null)
+        throw new ArgumentNullException(nameof(name));
+
+      var attr = el.Attribute(name);
+      if (attr != null)
+      {
+        if (Int32.TryParse(attr.Value, out int result))
+          return result;
+        WriteToConsole($"[WARNING] Failed to parse value {attr.Value} to {typeof(Int32)} in {el.Name}.");
+        return defValue;
+      }
+      el.Add(new XAttribute(name, defValue));
+      return defValue;
+    }
+
+    public static string GetOrCreateDefaultAttributeValue(this XElement el, string name, string defValue)
+    {
+      if (el == null)
+        throw new ArgumentNullException(nameof(el));
+      if (name == null)
+        throw new ArgumentNullException(nameof(name));
+
+      var attr = el.Attribute(name);
+      if (attr != null)
+        return attr.Value;
+      el.Add(new XAttribute(name, defValue ?? String.Empty));
+      return defValue ?? String.Empty;
     }
   }
 }

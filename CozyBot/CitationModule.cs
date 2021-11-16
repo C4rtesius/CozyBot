@@ -46,7 +46,7 @@ namespace CozyBot
     /// <summary>
     /// String for citation usage count in XML.
     /// </summary>
-    private static string _usageCountAttributeName = "used";
+    private static string _usageAttrName = "used";
 
     /// <summary>
     /// Module XML config path.
@@ -169,11 +169,8 @@ namespace CozyBot
 
         // Increment usage count.
 
-        var usageAttribute = citationEl.Attribute(_usageCountAttributeName);
-        if (usageAttribute != null)
-          usageAttribute.Value = Int32.TryParse(usageAttribute.Value, out int uses) ? $"{++uses}" : "1";
-        else
-          citationEl.Add(new XAttribute(_usageCountAttributeName, "1"));
+        var usageCount = citationEl.GetOrCreateDefaultAttributeValue(_usageAttrName, 0);
+        citationEl.Attribute(_usageAttrName).Value = $"{++usageCount}";
 
         await ModuleConfigChanged().ConfigureAwait(false);
         Reconfigure(_configEl);

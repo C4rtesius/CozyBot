@@ -110,7 +110,7 @@ namespace CozyBot
     /// <summary>
     /// Regex used in List commands parsing;
     /// </summary>
-    protected virtual string ListCommandRegex { get; } = _listCommandRegex;
+    protected virtual string ListCommandRegex => _listCommandRegex;
 
     /// <summary>
     /// Configuration Changed Event. Raised on changes to config.
@@ -164,21 +164,13 @@ namespace CozyBot
       get
       {
         foreach (var cmd in _cfgCommands)
-        {
           yield return cmd;
-        }
         foreach (var cmd in _addCommands)
-        {
           yield return cmd;
-        }
         foreach (var cmd in _useCommands)
-        {
           yield return cmd;
-        }
         foreach (var cmd in _delCommands)
-        {
           yield return cmd;
-        }
       }
     }
 
@@ -228,18 +220,17 @@ namespace CozyBot
     }
 
     /// <summary>
-    /// Extracts list of IDs from XAttribute.
+    /// Extracts list of IDs from string.
     /// </summary>
-    /// <param name="attr">XAttribute to extract IDs from.</param>
-    /// <returns>List of IDs from specified XAttribute.</returns>
-    protected List<ulong> ExtractPermissions(XAttribute attr)
+    /// <param name="attr">String to extract IDs from.</param>
+    /// <returns>List of IDs from specified string.</returns>
+    protected List<ulong> ExtractPermissions(string permString)
     {
       List<ulong> ids = new List<ulong>();
 
-      if (attr != null)
+      if (String.IsNullOrEmpty(permString))
       {
-        string permStringValue = attr.Value;
-        string[] stringIds = permStringValue.Trim().Split(" ");
+        string[] stringIds = permString.Trim().Split(" ");
         if (stringIds.Length > 0)
           foreach (var stringID in stringIds)
             if (ulong.TryParse(stringID, out ulong id))
@@ -253,24 +244,13 @@ namespace CozyBot
     /// Module configuration method.
     /// </summary>
     /// <param name="configEl">XElement containing guild's modules config.</param>
-    protected virtual void Configure(XElement configEl)
+    private void Configure(XElement configEl)
     {
-      XElement guildBotModuleCfg = configEl.Element(ModuleXmlName);
+      XElement guildBotModuleCfg = configEl.Element(ModuleXmlName) ??
+                                   throw new ApplicationException($"[{LogPref}] Failed to configure.");
 
-      bool isActive = false;
-
-      if (guildBotModuleCfg.Attribute("on") != null &&
-          !Boolean.TryParse(guildBotModuleCfg.Attribute("on").Value, out isActive))
-        isActive = false;
-
-      _isActive = isActive;
-      string prefix = _defaultPrefix;
-
-      if (guildBotModuleCfg.Attribute("prefix") != null &&
-          !String.IsNullOrWhiteSpace(guildBotModuleCfg.Attribute("prefix").Value))
-        prefix = guildBotModuleCfg.Attribute("prefix").Value;
-
-      _prefix = prefix;
+      _isActive = guildBotModuleCfg.GetOrCreateDefaultAttributeValue("on", false);
+      _prefix = guildBotModuleCfg.GetOrCreateDefaultAttributeValue("prefix", _defaultPrefix);
 
       if (!File.Exists(ModuleConfigFilePath))
         CreateDefaultModuleConfig(ModuleConfigFilePath);
@@ -278,32 +258,18 @@ namespace CozyBot
       _moduleConfig = XDocument.Load(ModuleConfigFilePath);
       XElement moduleCfgEl = _moduleConfig.Root;
 
-      if (moduleCfgEl.Attribute("cfgPerm") == null)
-        moduleCfgEl.Add(new XAttribute("cfgPerm", String.Empty));
-      if (moduleCfgEl.Attribute("addPerm") == null)
-        moduleCfgEl.Add(new XAttribute("addPerm", String.Empty));
-      if (moduleCfgEl.Attribute("usePerm") == null)
-        moduleCfgEl.Add(new XAttribute("usePerm", String.Empty));
-      if (moduleCfgEl.Attribute("delPerm") == null)
-        moduleCfgEl.Add(new XAttribute("delPerm", String.Empty));
-
-      List<ulong> addPermissionList = ExtractPermissions(moduleCfgEl.Attribute("addPerm"));
-      List<ulong> usePermissionList = ExtractPermissions(moduleCfgEl.Attribute("usePerm"));
-      List<ulong> cfgPermissionList = ExtractPermissions(moduleCfgEl.Attribute("cfgPerm"));
-      List<ulong> delPermissionList = ExtractPermissions(moduleCfgEl.Attribute("delPerm"));
-
-      if (isActive)
+      if (_isActive)
       {
-        GenerateCfgCommands(cfgPermissionList);
-        GenerateUseCommands(usePermissionList);
-        GenerateAddCommands(addPermissionList);
-        GenerateDelCommands(delPermissionList);
+        GenerateAddCommands(ExtractPermissions(moduleCfgEl.GetOrCreateDefaultAttributeValue("addPerm", String.Empty)));
+        GenerateUseCommands(ExtractPermissions(moduleCfgEl.GetOrCreateDefaultAttributeValue("usePerm", String.Empty)));
+        GenerateCfgCommands(ExtractPermissions(moduleCfgEl.GetOrCreateDefaultAttributeValue("cfgPerm", String.Empty)));
+        GenerateDelCommands(ExtractPermissions(moduleCfgEl.GetOrCreateDefaultAttributeValue("delPerm", String.Empty)));
       }
       else
       {
-        _cfgCommands = new List<IBotCommand>();
-        _useCommands = new List<IBotCommand>();
         _addCommands = new List<IBotCommand>();
+        _useCommands = new List<IBotCommand>();
+        _cfgCommands = new List<IBotCommand>();
         _delCommands = new List<IBotCommand>();
       }
     }
@@ -718,7 +684,11 @@ namespace CozyBot
     /// <param name="configEl">New configuration.</param>
     /// <returns>Async task performing config change.</returns>
     protected async Task RaiseConfigChanged(XElement configEl)
-      => await Task.Run(() => _configChanged(this, new ConfigChangedEventArgs(configEl))).ConfigureAwait(false);
+      => await Task.Run(() =>
+      {
+        if (_configChanged != null)
+          _configChanged(this, new ConfigChangedEventArgs(configEl));
+      }).ConfigureAwait(false);
 
     /// <summary>
     /// Abstract method for content Addition command.
@@ -794,6 +764,8 @@ namespace CozyBot
       await msg.Channel.SendMessageAsync(String.Empty, false, BuildHelpEmbed(user)).ConfigureAwait(false);
     }
 
+    protected abstract Embed BuildHelpEmbed(SocketGuildUser user);
+
     /// <summary>
     /// Abstract method for providing List of user uploaded content.
     /// </summary>
@@ -801,13 +773,12 @@ namespace CozyBot
     /// <returns>Async Task performing List function.</returns>
     protected virtual async Task ListCommand(SocketMessage msg)
     {
-      string cmdPrefix = $"[{LogPref}][LIST]";
-      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
-
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
-
       if (!regexMatch.Success)
         return;
+
+      string cmdPrefix = $"[{LogPref}][LIST]";
+      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
 
       string keyStr = regexMatch.Groups["key"].Value;
 
@@ -841,7 +812,5 @@ namespace CozyBot
     private static XElement GetFirstOrDefaultSubElementByName(XElement rootEl, string elName, string subKey)
       => rootEl.Elements(elName).FirstOrDefault(
         el => el.Attribute("name") != null && subKey.ExactAs(el.Attribute("name").Value));
-
-    protected abstract Embed BuildHelpEmbed(SocketGuildUser user);
   }
 }
