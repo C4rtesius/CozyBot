@@ -36,10 +36,13 @@ namespace CozyBot
     /// </summary>
     private static string _moduleXmlName = "userimg";
 
+    protected override string ListItemString => "пікч";
+    protected override string DeletedItemString => "пікчі";
+
     /// <summary>
     /// Module working folder.
     /// </summary>
-    private static string _moduleFolder = "userimg";
+    protected override string ModuleFolder => "userimg";
 
     /// <summary>
     /// String for citation usage count in XML.
@@ -105,8 +108,8 @@ namespace CozyBot
     public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
       : base(configEl, adminIds, clientId, workingPath)
     {
-      if (!Directory.Exists(Path.Combine(_guildPath, _moduleFolder)))
-        Directory.CreateDirectory(Path.Combine(_guildPath, _moduleFolder));
+      if (!Directory.Exists(Path.Combine(_guildPath, ModuleFolder)))
+        Directory.CreateDirectory(Path.Combine(_guildPath, ModuleFolder));
 
       _ratelimitDict = new ConcurrentDictionary<string, Task>();
     }
@@ -131,7 +134,7 @@ namespace CozyBot
 
         try
         {
-          await SendFileTask(msg, Path.Combine(_guildPath, _moduleFolder, imgFileName)).ConfigureAwait(false);
+          await SendFileTask(msg, Path.Combine(_guildPath, ModuleFolder, imgFileName)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -202,7 +205,7 @@ namespace CozyBot
                                new XAttribute("name", newItemGuidString),
                                newItemFileName);
 
-        string filepath = Path.Combine(_guildPath, _moduleFolder, newItemFileName);
+        string filepath = Path.Combine(_guildPath, ModuleFolder, newItemFileName);
 
         await DownloadFile(att, msg.Channel, filepath).ConfigureAwait(false);
       }
@@ -242,55 +245,7 @@ namespace CozyBot
       await msg.Channel.SendMessageAsyncSafe("Зберіг пікчу " + EmojiCodes.DankPepe).ConfigureAwait(false);
     }
 
-    protected override async Task ListCommand(SocketMessage msg)
-    {
-      string cmdPrefix = $"[{LogPref}][LIST]";
-      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
-
-      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
-
-      if (!regexMatch.Success)
-        return;
-
-      string keyStr = regexMatch.Groups["key"].Value;
-
-      var list = RPKeyListGenerator(GetRootByKey(keyStr),
-                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.",
-                                    false);
-      if (list.Count == 0)
-        return;
-      list.Add(keyStr);
-
-      string output = String.Concat("**Список доступних пікч",
-                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
-                                    $":**{Environment.NewLine}```{Environment.NewLine}");
-
-      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-      await dm.GenerateAndSendOutputMessages(output,
-                                             list,
-                                             s => $"{s}{Environment.NewLine}",
-                                             s => $"```{Environment.NewLine}{s}",
-                                             s => $"{s}```").ConfigureAwait(false);
-
-      output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
-      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
-    }
-
-    protected override async Task HelpCommand(SocketMessage msg)
-    {
-      if (!(msg.Author is SocketGuildUser user))
-        return;
-
-      await msg.DeleteAsyncSafe($"[{LogPref}][HELP]").ConfigureAwait(false);
-
-      //var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-      await msg.Channel.SendMessageAsync(String.Empty, false, BuildHelpEmbed(user)).ConfigureAwait(false);
-
-      //string output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
-      //await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
-    }
-
-    private Embed BuildHelpEmbed(SocketGuildUser user)
+    protected override Embed BuildHelpEmbed(SocketGuildUser user)
     {
       var guild = user.Guild;
       string iconUrl = guild.IconUrl;
@@ -333,79 +288,6 @@ namespace CozyBot
 
       eb.Fields.Add(efb);
       return eb.Build();
-    }
-
-    protected override async Task DeleteCommand(SocketMessage msg)
-    {
-      if (!Regex.IsMatch(msg.Content, ListCommandRegex))
-        return;
-      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
-
-      string key = regexMatch.Groups["key"].Value;
-      if (String.IsNullOrWhiteSpace(key))
-        return;
-
-      var listRoot = GetRootByKey(key);
-      var delDict = new Dictionary<string, XElement>();
-
-      RPItemDictGenerator(listRoot, $"{key}.", delDict);
-
-      List<string> imgDeleted = new List<string>();
-
-      foreach (var delKVP in delDict)
-      {
-        DeleteItemRecursively(delKVP.Value);
-        imgDeleted.Add(delKVP.Key);
-        try
-        {
-          await Task.Run(() => File.Delete(Path.Combine(_guildPath, _moduleFolder, delKVP.Value.Value))).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          ex.LogToConsole($"[{LogPref}][DEL] Image deletion failed: {key} -> {delKVP.Value.Value}");
-          throw;
-        }
-      }
-
-      if (imgDeleted.Count == 0)
-      {
-        await msg.Channel.SendMessageAsyncSafe($"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
-        return;
-      }
-
-      await ModuleConfigChanged().ConfigureAwait(false);
-      Reconfigure(_configEl);
-      string output = $"Видалив наступні пікчі:{Environment.NewLine}```{Environment.NewLine}";
-
-      await msg.Channel.GenerateAndSendOutputMessages(output,
-                                                      imgDeleted,
-                                                      s => $"{s}{Environment.NewLine}",
-                                                      s => $"```{Environment.NewLine}{s}",
-                                                      s => $"{s}```").ConfigureAwait(false);
-
-      await msg.Channel.SendMessageAsyncSafe(EmojiCodes.Pepe).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Creates default module config XML file and writes file to disk.
-    /// </summary>
-    /// <param name="filePath">Config filepath.</param>
-    protected override void CreateDefaultModuleConfig(string filePath)
-    {
-      try
-      {
-        new XDocument(
-          new XElement(ModuleXmlName,
-            new XAttribute("cfgPerm", String.Empty),
-            new XAttribute("addPerm", String.Empty),
-            new XAttribute("usePerm", String.Empty),
-            new XAttribute("delPerm", String.Empty))).Save(filePath);
-      }
-      catch (Exception ex)
-      {
-        ex.LogToConsole($"[{LogPref}] Default config creation failed.");
-        throw;
-      }
     }
   }
 }

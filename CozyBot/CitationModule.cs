@@ -35,10 +35,13 @@ namespace CozyBot
     /// </summary>
     private static string _moduleXmlName = "usercite";
 
+    protected override string ListItemString => "цитат";
+    protected override string DeletedItemString => "цитати";
+
     /// <summary>
     /// Module working folder.
     /// </summary>
-    private static string _moduleFolder = @"usercite";
+    protected override string ModuleFolder => "usercite";
 
     /// <summary>
     /// String for citation usage count in XML.
@@ -109,8 +112,8 @@ namespace CozyBot
     public CitationModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
         : base(configEl, adminIds, clientId, workingPath)
     {
-      if (!Directory.Exists(Path.Combine(_guildPath, _moduleFolder)))
-        Directory.CreateDirectory(Path.Combine(_guildPath, _moduleFolder));
+      if (!Directory.Exists(Path.Combine(_guildPath, ModuleFolder)))
+        Directory.CreateDirectory(Path.Combine(_guildPath, ModuleFolder));
 
       _ratelimitDict = new ConcurrentDictionary<string, Task>();
     }
@@ -143,7 +146,7 @@ namespace CozyBot
         string citation;
         try
         {
-          citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, citationFileName)).ConfigureAwait(false);
+          citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, ModuleFolder, citationFileName)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -224,7 +227,7 @@ namespace CozyBot
 
       try
       {
-        await File.WriteAllTextAsync(Path.Combine(_guildPath, _moduleFolder, newItemFileName), regexMatch.Groups["content"].Value).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_guildPath, ModuleFolder, newItemFileName), regexMatch.Groups["content"].Value).ConfigureAwait(false);
       }
       catch (Exception ex)
       {
@@ -278,40 +281,6 @@ namespace CozyBot
       Rule vlistRule = RuleGenerator.HasRoleByIds(allListPerms) & RuleGenerator.PrefixatedCommand(_prefix, "vlist");
 
       _useCommands.Add(new BotCommand($"{StringID}-vlistcmd", vlistRule, VerboseListCommand));
-    }
-
-    protected override async Task ListCommand(SocketMessage msg)
-    {
-      string cmdPrefix = $"[{LogPref}][LIST]";
-      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
-
-      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
-
-      if (!regexMatch.Success)
-        return;
-
-      string keyStr = regexMatch.Groups["key"].Value;
-
-      var list = RPKeyListGenerator(GetRootByKey(keyStr),
-                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.",
-                                    false);
-      if (list.Count == 0)
-        return;
-      list.Add(keyStr);
-
-      string output = String.Concat("**Список доступних цитат",
-                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
-                                    $":**{Environment.NewLine}```{Environment.NewLine}");
-
-      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-      await dm.GenerateAndSendOutputMessages(output,
-                                             list,
-                                             s => $"{s}{Environment.NewLine}",
-                                             s => $"```{Environment.NewLine}{s}",
-                                             s => $"{s}```").ConfigureAwait(false);
-
-      output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
-      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
     }
 
     protected override async Task SearchCommand(SocketMessage msg)
@@ -373,7 +342,7 @@ namespace CozyBot
 
           try
           {
-            citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, citationFileName)).ConfigureAwait(false);
+            citation = await File.ReadAllTextAsync(Path.Combine(_guildPath, ModuleFolder, citationFileName)).ConfigureAwait(false);
           }
           catch (Exception ex)
           {
@@ -456,7 +425,7 @@ namespace CozyBot
       {
         try
         {
-          string result = await File.ReadAllTextAsync(Path.Combine(_guildPath, _moduleFolder, kvp.Value.Value)).ConfigureAwait(false);
+          string result = await File.ReadAllTextAsync(Path.Combine(_guildPath, ModuleFolder, kvp.Value.Value)).ConfigureAwait(false);
           if (result.Length > _msgLengthLimit)
             return String.Empty;
           return $"`{kvp.Key}`{Environment.NewLine}{result}{Environment.NewLine}";
@@ -469,20 +438,7 @@ namespace CozyBot
       }
     }
 
-    protected override async Task HelpCommand(SocketMessage msg)
-    {
-      if (!(msg.Author is SocketGuildUser user))
-        return;
-
-      await msg.DeleteAsyncSafe($"[{LogPref}][HELP]").ConfigureAwait(false);
-
-      //var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-      await msg.Channel.SendMessageAsync(String.Empty, false, BuildHelpEmbed(user)).ConfigureAwait(false);
-
-      //await msg.Channel.SendMessageAsyncSafe($"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}").ConfigureAwait(false);
-    }
-
-    private Embed BuildHelpEmbed(SocketGuildUser user)
+    protected override Embed BuildHelpEmbed(SocketGuildUser user)
     {
       var guild = user.Guild;
       string iconUrl = guild.IconUrl;
@@ -526,76 +482,6 @@ namespace CozyBot
 
       eb.Fields.Add(efb);
       return eb.Build();
-    }
-
-    protected override async Task DeleteCommand(SocketMessage msg)
-    {
-      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
-
-      if (!regexMatch.Success)
-        return;
-
-      string key = regexMatch.Groups["key"].Value;
-      if (String.IsNullOrWhiteSpace(key))
-        return;
-
-      var delDict = new Dictionary<string, XElement>();
-      RPItemDictGenerator(GetRootByKey(key), $"{key}.", delDict);
-      List<string> citationsDeleted = new List<string>();
-
-      foreach (var delKVP in delDict)
-      {
-        DeleteItemRecursively(delKVP.Value);
-        citationsDeleted.Add(delKVP.Key);
-        try
-        {
-          await Task.Run(() => File.Delete(Path.Combine(_guildPath, _moduleFolder, delKVP.Value.Value))).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          ex.LogToConsole($"[{LogPref}][DEL] Citation deletion failed: {key} -> {delKVP.Value.Value}");
-          throw;
-        }
-      }
-
-      if (citationsDeleted.Count == 0)
-      {
-        await msg.Channel.SendMessageAsyncSafe(@$"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
-        return;
-      }
-
-      await ModuleConfigChanged().ConfigureAwait(false);
-      Reconfigure(_configEl);
-      string output = @$"Видалив наступні цитати:{Environment.NewLine}```{Environment.NewLine}";
-
-      await msg.Channel.GenerateAndSendOutputMessages(output,
-                                                      citationsDeleted,
-                                                      s => $"{s}{Environment.NewLine}",
-                                                      s => $"```{Environment.NewLine}{s}",
-                                                      s => $"{s}```").ConfigureAwait(false);
-
-      await msg.Channel.SendMessageAsyncSafe(EmojiCodes.Pepe).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Creates default module config XML file and writes file to disk.
-    /// </summary>
-    /// <param name="filePath">Config filepath.</param>
-    protected override void CreateDefaultModuleConfig(string filePath)
-    {
-      try
-      {
-        new XDocument(new XElement(ModuleXmlName,
-                                   new XAttribute("cfgPerm", String.Empty),
-                                   new XAttribute("addPerm", String.Empty),
-                                   new XAttribute("usePerm", String.Empty),
-                                   new XAttribute("delPerm", String.Empty))).Save(filePath);
-      }
-      catch (Exception ex)
-      {
-        ex.LogToConsole($"[{LogPref}] Default config creation failed: {filePath}");
-        throw;
-      }
     }
   }
 }

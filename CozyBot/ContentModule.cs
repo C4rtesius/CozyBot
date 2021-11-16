@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
+using Discord;
 using Discord.WebSocket;
 
 namespace CozyBot
@@ -139,6 +140,11 @@ namespace CozyBot
     /// Module identifier for logging purposes.
     /// </summary>
     public virtual string LogPref => StringID.ToUpper(CultureInfo.InvariantCulture);
+
+    protected abstract string DeletedItemString { get; }
+    protected abstract string ListItemString { get; }
+
+    protected abstract string ModuleFolder { get; }
 
     /// <summary>
     /// Module XML config path.
@@ -306,7 +312,22 @@ namespace CozyBot
     /// Creates default module XML config file.
     /// </summary>
     /// <param name="filePath">Path to config file.</param>
-    protected abstract void CreateDefaultModuleConfig(string filePath);
+    protected virtual void CreateDefaultModuleConfig(string filePath)
+    {
+      try
+      {
+        new XDocument(new XElement(ModuleXmlName,
+                                   new XAttribute("cfgPerm", String.Empty),
+                                   new XAttribute("addPerm", String.Empty),
+                                   new XAttribute("usePerm", String.Empty),
+                                   new XAttribute("delPerm", String.Empty))).Save(filePath);
+      }
+      catch (Exception ex)
+      {
+        ex.LogToConsole($"[{LogPref}] Default config creation failed.");
+        throw;
+      }
+    }
 
     /// <summary>
     /// Generates module configuration commands from specified list of allowed role IDs.
@@ -711,21 +732,104 @@ namespace CozyBot
     /// </summary>
     /// <param name="msg">Message containing command invocation.</param>
     /// <returns>Async Task performing content Deletion.</returns>
-    protected abstract Task DeleteCommand(SocketMessage msg);
+    protected virtual async Task DeleteCommand(SocketMessage msg)
+    {
+      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+      if (!regexMatch.Success)
+        return;
+
+      string key = regexMatch.Groups["key"].Value;
+      if (String.IsNullOrWhiteSpace(key))
+        return;
+
+      var delDict = new Dictionary<string, XElement>();
+      RPItemDictGenerator(GetRootByKey(key), $"{key}.", delDict);
+      List<string> imgDeleted = new List<string>();
+
+      foreach (var delKVP in delDict)
+      {
+        DeleteItemRecursively(delKVP.Value);
+        imgDeleted.Add(delKVP.Key);
+        try
+        {
+          await Task.Run(() => File.Delete(Path.Combine(_guildPath, ModuleFolder, delKVP.Value.Value))).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+          ex.LogToConsole($"[{LogPref}][DEL] Item deletion failed: {key} -> {delKVP.Value.Value}");
+          throw;
+        }
+      }
+
+      if (imgDeleted.Count == 0)
+      {
+        await msg.Channel.SendMessageAsyncSafe($"Щооо ?? {EmojiCodes.WaitWhat}").ConfigureAwait(false);
+        return;
+      }
+
+      await ModuleConfigChanged().ConfigureAwait(false);
+      Reconfigure(_configEl);
+      string output = $"Видалив наступні **{DeletedItemString}**:{Environment.NewLine}```{Environment.NewLine}";
+
+      await msg.Channel.GenerateAndSendOutputMessages(output,
+                                                      imgDeleted,
+                                                      s => $"{s}{Environment.NewLine}",
+                                                      s => $"```{Environment.NewLine}{s}",
+                                                      s => $"{s}```").ConfigureAwait(false);
+
+      await msg.Channel.SendMessageAsyncSafe(EmojiCodes.Pepe).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Abstract method for Help command.
     /// </summary>
     /// <param name="msg">Message containing command invocation.</param>
     /// <returns>Async Task performing Help function.</returns>
-    protected abstract Task HelpCommand(SocketMessage msg);
+    protected virtual async Task HelpCommand(SocketMessage msg)
+    {
+      if (!(msg.Author is SocketGuildUser user))
+        return;
+
+      await msg.DeleteAsyncSafe($"[{LogPref}][HELP]").ConfigureAwait(false);
+      await msg.Channel.SendMessageAsync(String.Empty, false, BuildHelpEmbed(user)).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Abstract method for providing List of user uploaded content.
     /// </summary>
     /// <param name="msg">Message containing command invocation.</param>
     /// <returns>Async Task performing List function.</returns>
-    protected abstract Task ListCommand(SocketMessage msg);
+    protected virtual async Task ListCommand(SocketMessage msg)
+    {
+      string cmdPrefix = $"[{LogPref}][LIST]";
+      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
+
+      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+
+      if (!regexMatch.Success)
+        return;
+
+      string keyStr = regexMatch.Groups["key"].Value;
+
+      var list = RPKeyListGenerator(GetRootByKey(keyStr), String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $"{keyStr}.", false);
+      if (list.Count == 0)
+        return;
+      list.Add(keyStr);
+
+      string output = String.Concat($"**Список доступних {ListItemString}",
+                                    String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
+                                    $":**{Environment.NewLine}```{Environment.NewLine}");
+
+      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      await dm.GenerateAndSendOutputMessages(output,
+                                             list,
+                                             s => $"{s}{Environment.NewLine}",
+                                             s => $"```{Environment.NewLine}{s}",
+                                             s => $"{s}```").ConfigureAwait(false);
+
+      output = $"{msg.Author.Mention} подивись в приватні повідомлення {EmojiCodes.Bumagi}";
+      await msg.Channel.SendMessageAsyncSafe(output).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Abstract method for content Usage command generator.
@@ -737,5 +841,7 @@ namespace CozyBot
     private static XElement GetFirstOrDefaultSubElementByName(XElement rootEl, string elName, string subKey)
       => rootEl.Elements(elName).FirstOrDefault(
         el => el.Attribute("name") != null && subKey.ExactAs(el.Attribute("name").Value));
+
+    protected abstract Embed BuildHelpEmbed(SocketGuildUser user);
   }
 }
