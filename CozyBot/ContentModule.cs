@@ -228,7 +228,7 @@ namespace CozyBot
     {
       List<ulong> ids = new List<ulong>();
 
-      if (String.IsNullOrEmpty(permString))
+      if (!String.IsNullOrEmpty(permString))
       {
         string[] stringIds = permString.Trim().Split(" ");
         if (stringIds.Length > 0)
