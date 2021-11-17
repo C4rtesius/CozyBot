@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Xml.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -90,7 +91,12 @@ namespace CozyBot
 
     private async Task ConfigGuilds()
     {
-      var guilds = _client.Guilds;
+      // move this to the config later
+      const ulong serviceGuildId= 910122574527234058UL;
+
+      var guilds = _client.Guilds.Where(g => g.Id != serviceGuildId);
+      var serviceGuild = _client.Guilds.First(g => g.Id == serviceGuildId);
+
       foreach (var guild in guilds)
       {
         ulong guildID = guild.Id;
@@ -114,7 +120,7 @@ namespace CozyBot
           }
         }).ConfigureAwait(false);
 
-        GuildBot newBot = new GuildBot(guild, guildPath, _client.CurrentUser.Id);
+        GuildBot newBot = new GuildBot(guild, serviceGuild, guildPath, _client.CurrentUser.Id);
 
         _ctrlEventHandler += newBot.OnCtrlEvent;
 
@@ -125,16 +131,15 @@ namespace CozyBot
     private XDocument GetDefaultGuildConfig()
     {
       XDocument newConfig = new XDocument();
-      XElement root =
-        new XElement("guildbotconfig",
-          new XElement("coreprefix", _prefix),
-          new XElement("modules",
-            new XElement("usercite",
-              new XAttribute("on", $"{true}"),
-              new XAttribute("prefix", "c!")),
-            new XElement("userimg",
-              new XAttribute("on", $"{true}"),
-              new XAttribute("prefix", "i!"))));
+      XElement root = new XElement("guildbotconfig",
+                                   new XElement("coreprefix", _prefix),
+                                   new XElement("modules",
+                                                new XElement("usercite",
+                                                new XAttribute("on", $"{true}"),
+                                                new XAttribute("prefix", "c!")),
+                                   new XElement("userimg",
+                                                new XAttribute("on", $"{true}"),
+                                                new XAttribute("prefix", "i!"))));
       newConfig.Add(root);
 
       return newConfig;

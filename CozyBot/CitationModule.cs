@@ -391,16 +391,12 @@ namespace CozyBot
       await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
 
       var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
-
       if (!regexMatch.Success)
         return;
 
       var cmdKey = regexMatch.Groups["key"].Value;
-
-      var listRoot = GetRootByKey(cmdKey);
       var itemsDict = new Dictionary<string, XElement>();
-
-      RPItemDictGenerator(listRoot, String.IsNullOrWhiteSpace(cmdKey) ? String.Empty : cmdKey + ".", itemsDict);
+      RPItemDictGenerator(GetRootByKey(cmdKey), String.IsNullOrWhiteSpace(cmdKey) ? String.Empty : $"{cmdKey}.", itemsDict);
 
       List<string> outputMsgs = new List<string>();
 

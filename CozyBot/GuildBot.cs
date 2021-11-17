@@ -60,16 +60,17 @@ namespace CozyBot
     }
 
     protected SocketGuild _guild;
+    protected SocketGuild _serviceGuild;
 
     public Dictionary<string, IBotModule> ModulesDict => _modulesDict;
 
-    public GuildBot(SocketGuild guild, string guildPath, ulong clientId)
+    public GuildBot(SocketGuild guild, SocketGuild serviceGuild, string guildPath, ulong clientId)
     {
       _guild = Guard.NonNull(guild, nameof(guild));
+      _serviceGuild = Guard.NonNull(serviceGuild, nameof(serviceGuild));
       _guildPath = Guard.NonNull(guildPath, nameof(guildPath));
       _configPath = Path.Combine(_guildPath, "config.xml");
       _clientId = clientId;
-
       if (!File.Exists(_configPath))
         throw new ApplicationException("Invalid configPath, file does not exist.");
 
@@ -141,7 +142,8 @@ namespace CozyBot
         }
         if (modulesEl.Element("userimg") != null)
         {
-          ImageModule imageModule = new ImageModule(modulesEl, _adminIds, _clientId, _guildPath);
+          var imgServiceChannel = ImageModule.GetOrCreateServiceChannel(_guild, _serviceGuild).Result;
+          ImageModule imageModule = new ImageModule(modulesEl, _adminIds, _clientId, _guildPath, imgServiceChannel);
           _modulesDict.Add(imageModule.StringID, imageModule);
           imageModule.GuildBotConfigChanged += ImageModule_ConfigChanged;
         }

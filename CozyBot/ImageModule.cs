@@ -47,12 +47,14 @@ namespace CozyBot
     /// <summary>
     /// String for citation usage count in XML.
     /// </summary>
-    private static string _usageAttrName = "used";
+    private const string _usageAttrName = "used";
 
     /// <summary>
     /// ConcurrentDictionary to implement ratelimiting per user, per channel, per command key.
     /// </summary>
     private ConcurrentDictionary<string, Task> _ratelimitDict;
+
+    private IMessageChannel _imgServiceChannel;
 
     /// <summary>
     /// Module XML config path.
@@ -70,7 +72,8 @@ namespace CozyBot
       "help",
       "cfg",
       "del",
-      "search"
+      "search",
+      "view"
     };
 
     /// <summary>
@@ -105,13 +108,28 @@ namespace CozyBot
     /// <param name="adminIds">IDs of Guild admins.</param>
     /// <param name="clientId">Bot ID.</param>
     /// <param name="workingPath">Path to module working folder.</param>
-    public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath)
+    /// <param name="imgServiceChannel">Service channel for image storage.</param>
+    public ImageModule(XElement configEl, List<ulong> adminIds, ulong clientId, string workingPath, IMessageChannel imgServiceChannel)
       : base(configEl, adminIds, clientId, workingPath)
     {
       if (!Directory.Exists(Path.Combine(_guildPath, ModuleFolder)))
         Directory.CreateDirectory(Path.Combine(_guildPath, ModuleFolder));
+      _imgServiceChannel = Guard.NonNull(imgServiceChannel, nameof(imgServiceChannel));
 
       _ratelimitDict = new ConcurrentDictionary<string, Task>();
+    }
+
+    protected override void GenerateUseCommands(List<ulong> perms)
+    {
+      // Generate base use commands from ContentModule
+      base.GenerateUseCommands(perms);
+
+      // Add verbose listing command
+      List<ulong> allListPerms = new List<ulong>(_adminIds);
+      allListPerms.AddRange(perms);
+      Rule viewRule = RuleGenerator.HasRoleByIds(allListPerms) & RuleGenerator.PrefixatedCommand(_prefix, "view");
+
+      _useCommands.Add(new BotCommand($"{StringID}-viewcmd", viewRule, ViewCommand));
     }
 
     protected override Func<SocketMessage, Task> UseCommandGenerator(string key)
@@ -135,7 +153,7 @@ namespace CozyBot
 
         try
         {
-          await SendFileTask(msg, Path.Combine(_guildPath, ModuleFolder, imgFileName)).ConfigureAwait(false);
+          await SendFileTask(msg.Channel, Path.Combine(_guildPath, ModuleFolder, imgFileName)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -157,8 +175,8 @@ namespace CozyBot
     /// <param name="msg">SocketMessage which triggered action.</param>
     /// <param name="filePath">Path to file to send.</param>
     /// <returns>Async Task sending specified file to SocketMessage channel.</returns>
-    public async Task SendFileTask(SocketMessage msg, string filePath)
-      => await msg.Channel.SendFileAsync(filePath).ConfigureAwait(false);
+    public async Task<IUserMessage> SendFileTask(IMessageChannel channel, string filePath)
+      => await channel.SendFileAsync(filePath).ConfigureAwait(false);
 
     protected async Task DownloadFile(Attachment att, ISocketMessageChannel sc, string filepath)
     {
@@ -285,6 +303,145 @@ namespace CozyBot
 
       eb.Fields.Add(efb);
       return eb.Build();
+    }
+
+    protected virtual async Task ViewCommand(SocketMessage msg)
+    {
+      string cmdPrefix = $"[{LogPref}][VIEW]";
+      await msg.DeleteAsyncSafe(cmdPrefix).ConfigureAwait(false);
+
+      if (!(msg.Author is SocketGuildUser user))
+        return;
+      var regexMatch = Regex.Match(msg.Content, ListCommandRegex);
+      if (!regexMatch.Success)
+        return;
+
+      var cmdKey = regexMatch.Groups["key"].Value;
+      var itemsDict = new Dictionary<string, XElement>();
+      RPItemDictGenerator(GetRootByKey(cmdKey), String.IsNullOrWhiteSpace(cmdKey) ? String.Empty : $"{cmdKey}.", itemsDict);
+      if (!itemsDict.Any())
+        return;
+
+      var itemsList = itemsDict.ToList();
+      int index = 0;
+      int oldIndex = -1;
+      var embedMessage = await msg.Channel.SendMessageAsyncSafe("*Чекайте...*").ConfigureAwait(false);
+      Emoji leftArrowEmoji = new Emoji("\u2b05\ufe0f");
+      Emoji rightArrowEmoji = new Emoji("\u27a1\ufe0f");
+      await embedMessage.AddReactionAsync(leftArrowEmoji).ConfigureAwait(false);
+      await embedMessage.AddReactionAsync(rightArrowEmoji).ConfigureAwait(false);
+      using ManualResetEventSlim mres = new ManualResetEventSlim(false);
+
+      Task waiter = Task.Run(async () =>
+      {
+        int timeoutTries = 12;
+        while (timeoutTries-- > 0)
+        {
+          var reactLeftUsers = await embedMessage.GetReactionUsersAsync(leftArrowEmoji, 50).FlattenAsync().ConfigureAwait(false);
+          var reactRightUsers = await embedMessage.GetReactionUsersAsync(rightArrowEmoji, 50).FlattenAsync().ConfigureAwait(false);
+          bool isLeft = reactLeftUsers.Any(u => u.Id == msg.Author.Id);
+          bool isRight = reactRightUsers.Any(u => u.Id == msg.Author.Id);
+          if (isRight || isLeft)
+            timeoutTries = 12;
+          if (isRight ^ isLeft)
+          {
+            if (isLeft)
+            {
+              index = --index == -1 ? itemsList.Count - 1 : index;
+              await embedMessage.RemoveReactionAsync(leftArrowEmoji, msg.Author).ConfigureAwait(false);
+            }
+            if (isRight)
+            {
+              index = ++index == itemsList.Count ? 0 : index;
+              await embedMessage.RemoveReactionAsync(rightArrowEmoji, msg.Author).ConfigureAwait(false);
+            }
+          }
+          await Task.Delay(5000).ConfigureAwait(false);
+        }
+        if (mres != null)
+          mres.Set();
+      });
+
+      string headerStr = String.Empty;
+      string descStr = String.Empty;
+      string picUrl = String.Empty;
+
+      while (mres != null && !mres.IsSet)
+      {
+        if (index != oldIndex)
+        {
+          oldIndex = index;
+          var picKVP = itemsList[index];
+          picUrl = picKVP.Value.GetOrCreateDefaultAttributeValue("url", String.Empty);
+          if (String.IsNullOrEmpty(picUrl))
+          {
+            var fileMsg = await SendFileTask(_imgServiceChannel, Path.Combine(_guildPath, ModuleFolder, picKVP.Value.Value)).ConfigureAwait(false);
+            picUrl = (fileMsg.Attachments.FirstOrDefault() ??
+                      throw new ApplicationException("Failed to upload image.")).Url;
+            picKVP.Value.Attribute("url").Value = picUrl;
+            try
+            {
+              await ModuleConfigChanged().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+              ex.LogToConsole($"{cmdPrefix} Config save failed.");
+            }
+          }
+          headerStr = $"{(String.IsNullOrEmpty(cmdKey) ? String.Empty : $"за ключем `{cmdKey}` ")}({index + 1}/{itemsList.Count})";
+          descStr = $"`{picKVP.Key}`";
+          await embedMessage.ModifyAsync(properties =>
+          {
+            properties.Embed = BuildViewEmbed(user, headerStr, descStr, picUrl);
+            properties.Content = String.Empty;
+          }).ConfigureAwait(false);
+        }
+        await Task.Delay(5000).ConfigureAwait(false);
+      }
+
+      await embedMessage.ModifyAsync(properties =>
+      {
+        properties.Embed = BuildViewEmbed(user, $"{headerStr} **Закінчено.**", descStr, picUrl);
+        properties.Content = String.Empty;
+      }).ConfigureAwait(false);
+    }
+
+    protected virtual Embed BuildViewEmbed(SocketGuildUser user, string header, string description, string url)
+    {
+      var guild = user.Guild;
+
+      var eba = new EmbedAuthorBuilder
+      {
+        Name = guild.GetUser(_clientId).Nickname,
+        IconUrl = guild.GetUser(_clientId).GetAvatarUrl()
+      };
+
+      var efob = new EmbedFooterBuilder
+      {
+        Text = "Оффнуть картинки - еще не самое проблемное."
+      };
+
+      var eb = new EmbedBuilder
+      {
+        Author = eba,
+        Color = Color.Green,
+        Title = $"Перегляд зображень {header}",
+        Description = description,
+        ImageUrl = url,
+        Timestamp = DateTime.Now,
+        Footer = efob
+      };
+      return eb.Build();
+    }
+
+    public static async Task<IMessageChannel> GetOrCreateServiceChannel(SocketGuild guild, SocketGuild serviceGuild)
+    {
+      Guard.NonNull(guild, nameof(guild));
+      Guard.NonNull(serviceGuild, nameof(serviceGuild));
+      string channelName = $"{guild.Id}-img";
+
+      return serviceGuild.TextChannels.FirstOrDefault(ch => ch.Name.ExactAs(channelName)) as IMessageChannel ??
+             await serviceGuild.CreateTextChannelAsync(channelName).ConfigureAwait(false);
     }
   }
 }
