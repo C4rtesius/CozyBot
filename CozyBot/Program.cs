@@ -53,7 +53,10 @@ namespace CozyBot
                                                 $"Current AppDomain BaseDirectory :{AppDomain.CurrentDomain.BaseDirectory}"));
         _guildBotsDict = new Dictionary<ulong, GuildBot>();
 
-        _client = new DiscordSocketClient();
+        var discordConfig = new DiscordSocketConfig();
+        discordConfig.GatewayIntents = GatewayIntents.All;
+
+        _client = new DiscordSocketClient(discordConfig);
         _client.Log += Log;
 
         await LoadCoreConfig().ConfigureAwait(false);

@@ -598,7 +598,7 @@ namespace CozyBot
 
         string output = $"Результати пошуку **ключів** за запитом `{regexStr}`:{Environment.NewLine}```{Environment.NewLine}";
 
-        var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+        var dm = await msg.Author.CreateDMChannelAsync().ConfigureAwait(false);
         await dm.GenerateAndSendOutputMessages(output,
                                                matchedKeysList,
                                                s => $"{s}{Environment.NewLine}",
@@ -791,7 +791,7 @@ namespace CozyBot
                                     String.IsNullOrWhiteSpace(keyStr) ? String.Empty : $" за ключем `{keyStr}`",
                                     $":**{Environment.NewLine}```{Environment.NewLine}");
 
-      var dm = await msg.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
+      var dm = await msg.Author.CreateDMChannelAsync().ConfigureAwait(false);
       await dm.GenerateAndSendOutputMessages(output,
                                              list,
                                              s => $"{s}{Environment.NewLine}",
